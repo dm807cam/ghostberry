@@ -2,15 +2,19 @@
 
 Production-ready Docker Compose setup for running Ghost CMS on a Raspberry Pi, secured behind a Cloudflare Tunnel.
 
+> **🔒 Security Notice**: This deployment follows security best practices including no direct port exposure, container hardening, and encrypted backups. Review [SECURITY.md](SECURITY.md) before production deployment.
+
 ## Features
 
 - 🚀 Ghost CMS 5.x (Alpine-based for ARM compatibility)
-- 🔒 Cloudflare Tunnel (no ports exposed, DDoS protection)
+- 🔒 Cloudflare Tunnel (zero-trust networking, no ports exposed, DDoS protection)
 - 💾 MySQL 8.0 database with optimized settings for Raspberry Pi
 - 📧 Email support (SMTP configuration)
 - 💪 Health checks and automatic restarts
-- 📦 Automated backup solution
-- 🔐 Environment-based configuration
+- 📦 Automated backup solution with optional encryption
+- 🔐 Environment-based secure configuration
+- 🛡️ Container security hardening (capability dropping, resource limits)
+- 📊 Log rotation to prevent disk exhaustion
 
 ## Prerequisites
 
@@ -240,13 +244,29 @@ docker stats
 
 ## Security Best Practices
 
-1. ✅ Use strong passwords in `.env`
-2. ✅ Keep `.env` file permissions restricted: `chmod 600 .env`
-3. ✅ Regularly update images: `docker compose pull && docker compose up -d`
-4. ✅ Enable automatic backups
-5. ✅ Monitor logs for suspicious activity
-6. ✅ Keep Raspberry Pi OS updated: `sudo apt update && sudo apt upgrade`
-7. ✅ Consider enabling Cloudflare WAF rules
+For comprehensive security documentation, see [SECURITY.md](SECURITY.md).
+
+**Critical Security Requirements**:
+
+1. ✅ **Use strong passwords** (32+ characters) in `.env`
+2. ✅ **Protect .env file**: `chmod 600 .env` and verify it's in `.gitignore`
+3. ✅ **Never commit secrets** to version control
+4. ✅ **No direct port exposure**: Ghost is ONLY accessible via Cloudflare Tunnel
+   - For local troubleshooting: `docker compose exec ghost wget http://localhost:2368`
+5. ✅ **Enable backup encryption**: Set `BACKUP_ENCRYPTION_KEY` in `.env`
+6. ✅ **Regularly update images**: `docker compose pull && docker compose up -d`
+7. ✅ **Enable automatic backups** with cron (see Backup section)
+8. ✅ **Monitor logs** for suspicious activity
+9. ✅ **Keep Raspberry Pi OS updated**: `sudo apt update && sudo apt upgrade`
+10. ✅ **Configure Cloudflare WAF rules** and rate limiting
+
+**Resource Limits**: Containers have memory and CPU limits configured for Raspberry Pi. Adjust in `docker-compose.yml` if needed.
+
+**Container Hardening**: All containers run with:
+- Dropped capabilities (principle of least privilege)
+- `no-new-privileges` flag
+- Log rotation (prevents disk exhaustion)
+- Specific version pinning (no :latest tags)
 
 ## Email Configuration
 
