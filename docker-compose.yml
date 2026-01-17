@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  ghost:
+    image: ghost:5-alpine
+    container_name: ghost
+    restart: unless-stopped
+    ports:
+      - "2368:2368"
+    environment:
+      # Basic Ghost configuration
+      url: https://yourdomain.com
+      NODE_ENV: production
+      
+      # Database configuration
+      database__client: mysql
+      database__connection__host: db
+      database__connection__user: ghost
+      database__connection__password: ${GHOST_DB_PASSWORD}
+      database__connection__database: ghost
+      
+      # Mail configuration (using Mailgun example - adjust as needed)
+      mail__transport: SMTP
+      mail__options__service: Mailgun
+      mail__options__host: ${MAIL_HOST:-smtp.mailgun.org}
+      mail__options__port: ${MAIL_PORT:-587}
+      mail__options__auth__user: ${MAIL_USER}
+      mail__options__auth__pass: ${MAIL_PASSWORD}
+      mail__from: ${MAIL_FROM:-noreply@yourdomain.com}
+    volumes:
+      - ghost_content:/var/lib/ghost/content
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ghost_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2368"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: mysql:8.0
+    container_name: ghost_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ghost
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ${GHOST_DB_PASSWORD}
+    volumes:
+      - ghost_db:/var/lib/mysql
+    networks:
+      - ghost_network
+    command:
+      - '--default-authentication-plugin=mysql_native_password'
+      - '--performance-schema=OFF'
+      - '--innodb-buffer-pool-size=128M'
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "ghost", "-p${GHOST_DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - ghost_network
+    depends_on:
+      ghost:
+        condition: service_healthy
+
+  # Optional: Database backup service
+  db_backup:
+    image: mysql:8.0
+    container_name: ghost_db_backup
+    restart: "no"
+    environment:
+      MYSQL_HOST: db
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ${GHOST_DB_PASSWORD}
+      MYSQL_DATABASE: ghost
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    networks:
+      - ghost_network
+    depends_on:
+      - db
+    entrypoint: /bin/sh
+    command: -c "echo 'Backup container ready. Run manually with: docker compose run --rm db_backup /backup.sh'"
+    profiles:
+      - backup
+
+volumes:
+  ghost_content:
+    driver: local
+  ghost_db:
+    driver: local
+
+networks:
+  ghost_network:
+    driver: bridge
