@@ -113,6 +113,9 @@ services:
       - SETGID
       - SETUID
       - DAC_OVERRIDE
+      - SETFCAP
+      - NET_RAW
+      - SYS_NICE
     # Logging configuration
     logging:
       driver: "json-file"
