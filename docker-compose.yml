@@ -78,25 +78,24 @@ services:
       ghost:
         condition: service_healthy
 
-  # Optional: Database backup service
-  db_backup:
-    image: mysql:8.0
-    container_name: ghost_db_backup
+  # Backup service - run manually for complete Ghost backup
+  ghost_backup:
+    image: ghost:5-alpine
+    container_name: ghost_backup
     restart: "no"
     environment:
-      MYSQL_HOST: db
-      MYSQL_USER: ghost
-      MYSQL_PASSWORD: ${GHOST_DB_PASSWORD}
-      MYSQL_DATABASE: ghost
+      GHOST_DB_PASSWORD: ${GHOST_DB_PASSWORD}
     volumes:
       - ./backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
+      - ghost_content:/var/lib/ghost/content:ro
     networks:
       - ghost_network
     depends_on:
+      - ghost
       - db
     entrypoint: /bin/sh
-    command: -c "echo 'Backup container ready. Run manually with: docker compose run --rm db_backup /backup.sh'"
+    command: -c "echo 'Backup container ready. Run: docker compose run --rm ghost_backup /backup.sh'"
     profiles:
       - backup
 
