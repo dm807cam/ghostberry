@@ -50,7 +50,24 @@ sudo apt-get install -y docker-compose
    - **Service**: `http://ghost:2368`
 7. Save the tunnel
 
-### 3. Configure Environment Variables
+### 3. Run Setup Script (Recommended)
+
+The easiest way to get started:
+
+```bash
+./setup.sh
+```
+
+This will:
+- Create `.env` from template
+- Prompt for your domain and Cloudflare token
+- Generate strong database passwords automatically
+- Set proper permissions
+- Create required directories
+
+### 4. Configure Environment Variables (Manual Alternative)
+
+If you prefer to configure manually:
 
 ```bash
 # Copy the example environment file
@@ -61,28 +78,15 @@ nano .env
 ```
 
 Update these critical values in `.env`:
-- `GHOST_DB_PASSWORD`: Strong database password
-- `MYSQL_ROOT_PASSWORD`: Strong root password
+- `GHOST_URL`: Your Ghost blog URL (e.g., `https://blog.yourdomain.com`)
+- `GHOST_DB_PASSWORD`: Strong database password (32+ characters)
+- `MYSQL_ROOT_PASSWORD`: Strong root password (32+ characters)
 - `CLOUDFLARE_TUNNEL_TOKEN`: Token from Cloudflare dashboard
 - Mail settings (if you want email notifications)
 
-### 4. Update Ghost URL
+**Note**: With the new `.env` configuration, you no longer need to edit `docker-compose.yml` directly!
 
-Edit `docker-compose.yml` and change:
-```yaml
-url: https://yourdomain.com
-```
-to your actual domain (e.g., `https://blog.yourdomain.com`)
-
-### 5. Create Required Directories
-
-```bash
-mkdir -p backups scripts
-mv backup.sh scripts/
-chmod +x scripts/backup.sh
-```
-
-### 6. Start the Services
+### 5. Start the Services
 
 ```bash
 # Start all services
@@ -94,6 +98,23 @@ docker compose logs -f
 # Verify services are running
 docker compose ps
 ```
+
+### 6. (Optional) Enable Auto-Start on Boot
+
+For production deployments, enable Ghost to start automatically when your Raspberry Pi boots:
+
+```bash
+# Edit the service file to set your installation path
+nano ghost.service
+
+# Install and enable the service
+sudo cp ghost.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable ghost.service
+sudo systemctl start ghost.service
+```
+
+See [SYSTEMD-SERVICE.md](SYSTEMD-SERVICE.md) for detailed instructions.
 
 ### 7. Access Ghost Admin
 

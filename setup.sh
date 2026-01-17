@@ -55,20 +55,27 @@ if [ ! -f ".env" ]; then
         echo ""
         echo "⚠️  IMPORTANT: You must edit .env file with your actual values!"
         echo ""
-        read -p "Enter your domain (e.g., blog.yourdomain.com): " DOMAIN
+        read -p "Enter your domain (e.g., https://blog.yourdomain.com): " DOMAIN
         read -p "Enter Cloudflare Tunnel Token: " CF_TOKEN
-        
+
+        # Ensure domain has https:// prefix
+        if [[ ! "$DOMAIN" =~ ^https?:// ]]; then
+            DOMAIN="https://${DOMAIN}"
+        fi
+
         # Generate random passwords
         DB_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         ROOT_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-        
+
         # Update .env file
+        sed -i "s|GHOST_URL=.*|GHOST_URL=${DOMAIN}|" .env
         sed -i "s|GHOST_DB_PASSWORD=.*|GHOST_DB_PASSWORD=${DB_PASS}|" .env
         sed -i "s|MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${ROOT_PASS}|" .env
         sed -i "s|CLOUDFLARE_TUNNEL_TOKEN=.*|CLOUDFLARE_TUNNEL_TOKEN=${CF_TOKEN}|" .env
-        
+
         echo "✅ Environment variables configured"
         echo ""
+        echo "Ghost URL set to: ${DOMAIN}"
         echo "Generated secure passwords for database"
         echo ""
     else
@@ -79,26 +86,28 @@ else
     echo "✅ .env file already exists"
 fi
 
-# Update Ghost URL in docker-compose.yml
-if [ ! -z "$DOMAIN" ]; then
-    echo "Updating Ghost URL in docker-compose.yml..."
-    if [ -f "docker-compose.yml" ]; then
-        sed -i "s|url: https://yourdomain.com|url: https://${DOMAIN}|" docker-compose.yml
-        echo "✅ Ghost URL updated to https://${DOMAIN}"
-        echo ""
-    fi
-fi
-
 # Set proper permissions
 chmod 600 .env
 echo "✅ Set secure permissions on .env file"
 echo ""
 
-# Verify Cloudflare token
+# Verify configuration
 source .env
+WARNINGS=0
+
 if [ "$CLOUDFLARE_TUNNEL_TOKEN" == "your_cloudflare_tunnel_token_here" ]; then
     echo "⚠️  WARNING: Cloudflare Tunnel token not set!"
-    echo "Please edit .env and add your Cloudflare Tunnel token"
+    WARNINGS=$((WARNINGS+1))
+fi
+
+if [ "$GHOST_URL" == "https://blog.yourdomain.com" ]; then
+    echo "⚠️  WARNING: Ghost URL not configured!"
+    WARNINGS=$((WARNINGS+1))
+fi
+
+if [ $WARNINGS -gt 0 ]; then
+    echo ""
+    echo "Please edit .env and configure the required values"
     echo ""
 fi
 

@@ -11,7 +11,7 @@ services:
     # For local troubleshooting: docker compose exec ghost wget http://localhost:2368
     environment:
       # Basic Ghost configuration
-      url: https://yourdomain.com
+      url: ${GHOST_URL:-https://yourdomain.com}
       NODE_ENV: production
 
       # Database configuration
