@@ -42,15 +42,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    # Resource limits for Raspberry Pi
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.5'
     # Security hardening
     security_opt:
       - no-new-privileges:true
@@ -94,15 +85,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # Resource limits for Raspberry Pi
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.5'
     # Security hardening
     security_opt:
       - no-new-privileges:true
@@ -143,15 +125,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Resource limits for Raspberry Pi
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.25'
     # Security hardening
     security_opt:
       - no-new-privileges:true
