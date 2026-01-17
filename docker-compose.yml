@@ -181,7 +181,9 @@ services:
       - ghost
       - db
     entrypoint: /bin/sh
-    command: -c "echo 'Backup container ready. Run: docker compose run --rm ghost_backup /backup.sh'"
+    command:
+      - -c
+      - "echo 'Backup container ready. Run: docker compose run --rm ghost_backup /backup.sh'"
     profiles:
       - backup
     # Security hardening for backup container
