@@ -35,10 +35,10 @@ services:
     networks:
       - ghost_network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "--server-response", "http://localhost:2368"]
+      test: ["CMD-SHELL", "node -e \"require('http').get({host: 'localhost', port: 2368, path: '/ghost/api/admin/site/', headers: {'X-Forwarded-Proto': 'https'}}, (res) => {process.exit(res.statusCode === 200 ? 0 : 1);}).on('error', () => {process.exit(1);})\""]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 40s
     # Security hardening
     security_opt:
