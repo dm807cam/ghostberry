@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ghost:
     # Pin to specific version for predictability and security
