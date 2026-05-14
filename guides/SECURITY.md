@@ -206,7 +206,7 @@ cloudflared:2024.12.2    # Specific Cloudflare version
 **Update Process**:
 ```bash
 # 1. Backup first
-docker compose run --rm ghost_backup /backup.sh
+./scripts/backup.sh
 
 # 2. Update image versions in docker-compose.yml
 
@@ -264,7 +264,7 @@ tmpfs:
 2. **Verify encryption** is working:
    ```bash
    # Create backup
-   docker compose run --rm ghost_backup /backup.sh
+   ./scripts/backup.sh
 
    # Check if encrypted (.gpg extension)
    ls -lh backups/*.gpg
@@ -296,7 +296,7 @@ tmpfs:
 3. **Backup verification**: Test restores quarterly
    ```bash
    # Test restore on development system
-   ./restore.sh backups/ghost_backup_YYYYMMDD_HHMMSS.tar.gz
+   ./scripts/restore.sh backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz.enc
    ```
 
 ### Backup Access Control
@@ -384,7 +384,7 @@ crontab -e
 sudo apt update && sudo apt upgrade -y
 
 # 2. Backup before updates
-docker compose run --rm ghost_backup /backup.sh
+./scripts/backup.sh
 
 # 3. Update Docker images
 docker compose pull
@@ -429,7 +429,7 @@ If you suspect a security breach:
    docker compose down
 
    # Backup current state for forensics
-   docker compose run --rm ghost_backup /backup.sh
+   ./scripts/backup.sh
    tar czf incident-$(date +%Y%m%d).tar.gz backups/ .env docker-compose.yml
    ```
 
@@ -457,7 +457,7 @@ If you suspect a security breach:
 4. **Restore from Known-Good Backup**:
    ```bash
    # Restore from before suspected compromise
-   ./restore.sh backups/ghost_backup_YYYYMMDD_HHMMSS.tar.gz
+   ./scripts/restore.sh backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz.enc
    ```
 
 5. **Contact Support**:

@@ -1,468 +1,124 @@
-# Ghost Backup & Restore Guide
+# Backup & Restore
 
-Complete guide for backing up and restoring your Ghost installation.
+Ghostberry ships with two scripts that handle the full lifecycle: `scripts/backup.sh` and `scripts/restore.sh`. The installer wires up a daily cron job; everything else is a single command.
 
-## 🎯 What Gets Backed Up
+## What's captured
 
-Our comprehensive backup solution captures **everything** you need to fully restore your Ghost blog:
+Each archive contains:
 
-### 1. Content & Settings
-- **content.json** - Ghost's official export format containing:
-  - All posts and pages (published and drafts)
-  - Tags and authors
-  - Site settings and configuration
-  - Navigation menus
-  - Custom integrations
-  - Email newsletter settings
+| File | Contents |
+|---|---|
+| `database.sql.gz` | `mysqldump` of the `ghost` database (single-transaction, utf8mb4) |
+| `content.tar.gz` | The entire `/var/lib/ghost/content` directory — themes, images, files, settings, routes, redirects |
+| `images.txt` | Pinned image versions at the time of backup (for reproducible restores) |
+| `timestamp.txt` | UTC timestamp |
 
-### 2. Media Files
-- **images.tar.gz** - All uploaded images:
-  - Post and page images
-  - Featured images
-  - Author avatars
-  - Site logo and icons
-  - Gallery images
-  - Content card images
+If `BACKUP_ENCRYPTION_KEY` is set in `.env` (the installer auto-generates one), the final archive is encrypted with `openssl enc -aes-256-cbc -pbkdf2 -iter 200000` and gets a `.enc` suffix.
 
-### 3. Custom Themes
-- **themes.tar.gz** - Your custom themes:
-  - Active theme files
-  - Inactive/backup themes
-  - Theme modifications
-  - Custom templates
-
-### 4. Uploaded Files
-- **files.tar.gz** - Any uploaded files:
-  - PDFs, documents
-  - Downloadable resources
-  - Other media files
-
-### 5. Configuration
-- **routes.yaml** - Custom routing configuration
-- **redirects.json** - URL redirects and mappings
-
-### 6. Database
-- **database.sql.gz** - Complete MySQL dump as safety net:
-  - All tables and data
-  - User accounts
-  - Relationships
-  - Full backup of everything in the database
-
-## 📦 Creating Backups
-
-### Manual Backup
+## Creating a backup
 
 ```bash
-# Run the backup script
-docker compose run --rm ghost_backup /backup.sh
+cd /opt/ghostberry
+./scripts/backup.sh
 ```
 
-**What happens:**
-1. Exports Ghost content using Ghost CLI
-2. Creates MySQL database dump
-3. Archives all images and media
-4. Backs up themes and custom files
-5. Saves routes and redirects
-6. Compresses everything into a single .tar.gz file
-7. Keeps the last 7 backups automatically
+Output lands in `backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz[.enc]`, mode `600`, with retention controlled by `BACKUP_KEEP` (default 7).
 
-**Backup location:** `./backups/ghost_backup_YYYYMMDD_HHMMSS.tar.gz`
+## Automated backups
 
-### Automated Backups
+The installer drops a cron job at `/etc/cron.d/ghostberry-backup` that runs daily at 03:17 and logs to `/var/log/ghostberry-backup.log`. Tune by editing that file.
 
-#### Option 1: Cron Job (Recommended)
-
-```bash
-# Edit your crontab
-crontab -e
-
-# Add one of these schedules:
-
-# Daily at 2 AM
-0 2 * * * cd /home/pi/ghost && /usr/bin/docker compose run --rm ghost_backup /backup.sh >> /var/log/ghost-backup.log 2>&1
-
-# Every 12 hours
-0 */12 * * * cd /home/pi/ghost && /usr/bin/docker compose run --rm ghost_backup /backup.sh >> /var/log/ghost-backup.log 2>&1
-
-# Weekly on Sunday at 3 AM
-0 3 * * 0 cd /home/pi/ghost && /usr/bin/docker compose run --rm ghost_backup /backup.sh >> /var/log/ghost-backup.log 2>&1
-```
-
-**Important:** Replace `/home/pi/ghost` with your actual Ghost installation path.
-
-#### Option 2: Systemd Timer
-
-Create `/etc/systemd/system/ghost-backup.service`:
+To switch to a systemd timer instead:
 
 ```ini
+# /etc/systemd/system/ghostberry-backup.service
 [Unit]
-Description=Ghost Backup Service
-Requires=docker.service
+Description=Ghostberry backup
+Requires=ghostberry.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/pi/ghost
-ExecStart=/usr/bin/docker compose run --rm ghost_backup /backup.sh
-StandardOutput=append:/var/log/ghost-backup.log
-StandardError=append:/var/log/ghost-backup.log
-```
+WorkingDirectory=/opt/ghostberry
+ExecStart=/opt/ghostberry/scripts/backup.sh
+User=YOUR_USER
 
-Create `/etc/systemd/system/ghost-backup.timer`:
-
-```ini
+# /etc/systemd/system/ghostberry-backup.timer
 [Unit]
-Description=Ghost Backup Timer
-Requires=ghost-backup.service
+Description=Daily Ghostberry backup
 
 [Timer]
 OnCalendar=daily
-OnCalendar=02:00
 Persistent=true
+RandomizedDelaySec=30m
 
 [Install]
 WantedBy=timers.target
 ```
 
-Enable and start:
-
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable ghost-backup.timer
-sudo systemctl start ghost-backup.timer
-
-# Check status
-sudo systemctl status ghost-backup.timer
+sudo systemctl enable --now ghostberry-backup.timer
+sudo rm /etc/cron.d/ghostberry-backup   # remove the cron version
 ```
 
-### Best Practices
-
-1. **Backup Before Updates**
-   ```bash
-   # Always backup before updating Ghost
-   docker compose run --rm ghost_backup /backup.sh
-   docker compose pull
-   docker compose up -d
-   ```
-
-2. **Test Backups Regularly**
-   - Verify backup files exist and aren't corrupted
-   - Periodically test restore process
-   - Check backup file sizes are reasonable
-
-3. **Keep Multiple Backup Locations**
-   - Local backups on Raspberry Pi
-   - Remote backups (see Off-Site Backup section below)
-   - Cloud storage backup
-
-4. **Monitor Backup Success**
-   ```bash
-   # Check recent backups
-   ls -lht backups/ | head -10
-   
-   # Check backup log
-   tail -f /var/log/ghost-backup.log
-   ```
-
-## 🔄 Restoring Backups
-
-### Full Restore
-
-Use the restore script for a complete restoration:
+## Restoring
 
 ```bash
-# List available backups
-ls -lh backups/
-
-# Restore a specific backup
-./restore.sh backups/ghost_backup_20260117_020000.tar.gz
+cd /opt/ghostberry
+./scripts/restore.sh backups/ghost_backup_20260514T021700Z.tar.gz.enc
 ```
 
-**What happens:**
-1. Confirms you want to restore (THIS WILL REPLACE ALL DATA)
-2. Stops Ghost to prevent corruption
-3. Drops and recreates the database
-4. Restores database from backup
-5. Restores all images, themes, and files
-6. Restores routes and redirects
-7. Starts Ghost
-8. Verifies Ghost is running
+The script will:
 
-### Partial Restore
+1. Confirm interactively (it overwrites your live DB and content).
+2. Decrypt the archive if it's `.enc`.
+3. Bring the DB up, stop Ghost.
+4. Reload the database via `mysql`.
+5. Wipe and re-populate the `ghost_content` volume from `content.tar.gz`.
+6. Start Ghost and tail its logs.
 
-If you only need to restore specific parts:
+## Off-site copies
 
-#### Restore Only Images
+The local archive is encrypted, so you can safely push it anywhere:
 
 ```bash
-# Extract backup
-mkdir /tmp/restore
-tar xzf backups/ghost_backup_20260117_020000.tar.gz -C /tmp/restore
+# rclone — any of dozens of cloud backends
+rclone copy /opt/ghostberry/backups remote:ghostberry/ --include 'ghost_backup_*.tar.gz.enc'
 
-# Stop Ghost
-docker compose stop ghost
-
-# Restore images
-docker compose run --rm -v /tmp/restore:/restore ghost sh -c \
-  "cd /var/lib/ghost/content && tar xzf /restore/ghost_backup_20260117_020000/images.tar.gz"
-
-# Start Ghost
-docker compose start ghost
-
-# Cleanup
-rm -rf /tmp/restore
+# rsync to another host
+rsync -avz /opt/ghostberry/backups/ user@nas.local:/backups/ghostberry/
 ```
 
-#### Restore Only Content (Posts/Pages)
+Schedule this **after** the nightly backup completes (e.g. cron at 04:00).
+
+## Verifying a backup
 
 ```bash
-# Extract backup
-mkdir /tmp/restore
-tar xzf backups/ghost_backup_20260117_020000.tar.gz -C /tmp/restore
+# Encrypted archive — decrypt and stream into tar to check integrity
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+  -in backups/ghost_backup_*.tar.gz.enc \
+  -pass env:BACKUP_ENCRYPTION_KEY \
+  | tar tzf - >/dev/null && echo "✅ archive intact"
 
-# Import via Ghost Admin
-# 1. Login to Ghost Admin: https://yourdomain.com/ghost
-# 2. Go to Settings > Labs > Import Content
-# 3. Upload the content.json file from /tmp/restore/ghost_backup_YYYYMMDD_HHMMSS/
-
-# Cleanup
-rm -rf /tmp/restore
+# Plain archive
+tar tzf backups/ghost_backup_*.tar.gz >/dev/null && echo "✅ archive intact"
 ```
 
-#### Restore Only Database
+## Disaster recovery
 
-```bash
-# Extract and restore database only
-tar xzOf backups/ghost_backup_20260117_020000.tar.gz \
-  ghost_backup_20260117_020000/database.sql.gz | \
-  gunzip | \
-  docker compose exec -T db mysql -u ghost -p${GHOST_DB_PASSWORD} ghost
-```
+Lost the Pi entirely:
 
-## 💾 Off-Site Backup Solutions
+1. Flash 64-bit Raspberry Pi OS to a new SD card.
+2. Copy your most recent backup archive **and** your old `.env` file to the new box.
+3. Run the one-shot installer with `NONINTERACTIVE=1` and the same `GHOST_URL`/`CLOUDFLARE_TUNNEL_TOKEN`, plus paste in the **same** `BACKUP_ENCRYPTION_KEY` from the old `.env` (otherwise the encrypted archive can't be opened).
+4. Drop the backup archive into `/opt/ghostberry/backups/`.
+5. `./scripts/restore.sh backups/<archive>`.
 
-### Option 1: Rclone to Cloud Storage
+> ⚠️  **The encryption key is the single most important thing to back up out-of-band.** Without it, an encrypted archive is just noise. Save it in a password manager.
 
-```bash
-# Install rclone
-curl https://rclone.org/install.sh | sudo bash
+## Checklist
 
-# Configure (interactive)
-rclone config
-
-# Sync backups to cloud (add to cron)
-rclone sync /home/pi/ghost/backups/ remote:ghost-backups/
-```
-
-### Option 2: Rsync to Remote Server
-
-```bash
-# Sync to remote server
-rsync -avz --delete \
-  /home/pi/ghost/backups/ \
-  user@remote-server:/path/to/backup/ghost/
-
-# Add to cron after main backup
-0 3 * * * rsync -avz /home/pi/ghost/backups/ user@remote:/backups/ghost/
-```
-
-### Option 3: USB Drive Backup
-
-```bash
-# Mount USB drive
-sudo mount /dev/sda1 /mnt/usb
-
-# Copy backups
-cp -r backups/ /mnt/usb/ghost-backups/
-
-# Unmount
-sudo umount /mnt/usb
-```
-
-### Option 4: GitHub/GitLab Private Repo
-
-```bash
-# Create a private repository for backups
-# Install git-lfs for large files
-sudo apt-get install git-lfs
-
-cd backups
-git init
-git lfs track "*.tar.gz"
-git add .
-git commit -m "Ghost backup"
-git remote add origin git@github.com:yourusername/ghost-backups-private.git
-git push -u origin main
-```
-
-## 🔍 Verifying Backups
-
-### Check Backup Integrity
-
-```bash
-# Test archive integrity
-tar tzf backups/ghost_backup_20260117_020000.tar.gz > /dev/null
-echo $? # Should output 0 if successful
-
-# List archive contents
-tar tzf backups/ghost_backup_20260117_020000.tar.gz
-
-# Check individual components
-tar xzOf backups/ghost_backup_20260117_020000.tar.gz \
-  ghost_backup_20260117_020000/content.json | jq . > /dev/null
-```
-
-### Test Restore (Safe Test)
-
-```bash
-# Create a test environment
-mkdir ghost-test
-cd ghost-test
-
-# Copy configuration
-cp ../docker-compose.yml .
-cp ../.env .
-
-# Modify ports in docker-compose.yml to avoid conflicts
-# Change "2368:2368" to "3368:2368"
-
-# Start test instance
-docker compose up -d
-
-# Restore to test instance
-cd ..
-./restore.sh backups/ghost_backup_20260117_020000.tar.gz
-
-# Test at http://localhost:3368
-
-# Cleanup test
-cd ghost-test
-docker compose down -v
-cd ..
-rm -rf ghost-test
-```
-
-## 📊 Backup Storage Management
-
-### Monitor Backup Size
-
-```bash
-# Total backup size
-du -sh backups/
-
-# Individual backup sizes
-du -h backups/*.tar.gz | sort -h
-
-# Backup growth over time
-ls -lht backups/ | awk '{print $5, $9}'
-```
-
-### Cleanup Old Backups
-
-Backups are automatically cleaned (keeps last 7), but you can manually manage:
-
-```bash
-# Keep only last 5 backups
-ls -t backups/ghost_backup_*.tar.gz | tail -n +6 | xargs rm -f
-
-# Remove backups older than 30 days
-find backups/ -name "ghost_backup_*.tar.gz" -mtime +30 -delete
-
-# Keep only backups from 1st of each month
-# (Run this monthly to create archive backups)
-ls backups/ghost_backup_*_01_*.tar.gz
-```
-
-## 🚨 Disaster Recovery
-
-### Complete System Failure
-
-If your Raspberry Pi fails completely:
-
-1. **Get a new Raspberry Pi**
-2. **Install Raspberry Pi OS**
-3. **Install Docker**
-   ```bash
-   curl -fsSL https://get.docker.com | sh
-   sudo apt-get install -y docker-compose
-   ```
-4. **Clone repository**
-   ```bash
-   git clone https://github.com/yourusername/ghost-raspberrypi-cloudflare.git
-   cd ghost-raspberrypi-cloudflare
-   ```
-5. **Restore your .env file** (hopefully you backed this up separately!)
-6. **Copy your latest backup** to `./backups/`
-7. **Run first-time setup**
-   ```bash
-   docker compose up -d
-   # Wait for initial setup
-   docker compose down
-   ```
-8. **Restore from backup**
-   ```bash
-   ./restore.sh backups/ghost_backup_YYYYMMDD_HHMMSS.tar.gz
-   ```
-
-### Database Corruption
-
-```bash
-# Stop Ghost
-docker compose stop ghost
-
-# Try to repair database
-docker compose exec db mysqlcheck -u root -p${MYSQL_ROOT_PASSWORD} --auto-repair --all-databases
-
-# If repair fails, restore from backup
-./restore.sh backups/ghost_backup_YYYYMMDD_HHMMSS.tar.gz
-```
-
-## 📝 Backup Checklist
-
-- [ ] Automated backups configured (cron/systemd)
-- [ ] Backups running successfully (check logs)
-- [ ] Backup retention policy set (default: 7 backups)
-- [ ] Off-site backup configured
-- [ ] Backup integrity verified monthly
-- [ ] Restore process tested quarterly
-- [ ] .env file backed up separately
-- [ ] Recovery documentation accessible
-- [ ] Cloudflare Tunnel token saved securely
-- [ ] Backup monitoring/alerting configured
-
-## 🔐 Security Notes
-
-1. **Backup Security**
-   - Backups contain your entire Ghost installation
-   - Store backups securely with appropriate permissions
-   - Encrypt backups if storing on untrusted storage
-   - Never commit backups to public repositories
-
-2. **Backup Permissions**
-   ```bash
-   # Secure backup directory
-   chmod 700 backups/
-   chmod 600 backups/*.tar.gz
-   ```
-
-3. **Encryption** (Optional)
-   ```bash
-   # Encrypt backup
-   gpg --symmetric --cipher-algo AES256 backups/ghost_backup_20260117_020000.tar.gz
-   
-   # Decrypt when needed
-   gpg --decrypt backups/ghost_backup_20260117_020000.tar.gz.gpg > backup.tar.gz
-   ```
-
-## 📞 Support
-
-If you encounter issues with backups:
-
-1. Check backup logs: `cat /var/log/ghost-backup.log`
-2. Verify disk space: `df -h`
-3. Test Docker connectivity: `docker compose ps`
-4. Review this guide's troubleshooting section
-5. Open an issue on GitHub with logs
-
----
-
-**Remember:** The best backup is the one you never need, but the worst disaster is the one you weren't prepared for. Test your backups regularly!
+- [ ] Cron is firing (`tail /var/log/ghostberry-backup.log`)
+- [ ] Disk has headroom (`df -h /opt/ghostberry`)
+- [ ] Off-site copy is running
+- [ ] `BACKUP_ENCRYPTION_KEY` is stored outside the Pi
+- [ ] You've done one practice restore (do this once a quarter)

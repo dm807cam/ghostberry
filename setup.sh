@@ -1,132 +1,129 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Ghostberry setup — idempotent .env writer.
+#
+# Can be run interactively or driven by env vars:
+#   GHOST_URL                Full URL (must include scheme)
+#   CLOUDFLARE_TUNNEL_TOKEN  Cloudflare Tunnel token
+#   MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, MAIL_FROM   (optional)
+#   NONINTERACTIVE=1         Fail rather than prompt for missing values
 
-# Ghost CMS Setup Script for Raspberry Pi
-# This script helps you set up Ghost CMS with Cloudflare Tunnel
+set -euo pipefail
 
-set -e
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+cd "${SCRIPT_DIR}"
 
-echo "========================================="
-echo "Ghost CMS + Cloudflare Tunnel Setup"
-echo "========================================="
-echo ""
+# Prefer reading from the controlling terminal so this works under `curl | bash`.
+TTY_IN=/dev/stdin
+if [[ -r /dev/tty ]]; then TTY_IN=/dev/tty; fi
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    echo "❌ Please do not run as root"
-    exit 1
+prompt() {
+  # prompt VAR "Question" [default]
+  local var="$1" q="$2" def="${3:-}" val=""
+  if [[ -n "${!var:-}" ]]; then return 0; fi
+  if [[ "${NONINTERACTIVE:-0}" == "1" ]]; then
+    echo "❌ ${var} not set and NONINTERACTIVE=1" >&2; exit 1
+  fi
+  if [[ -n "${def}" ]]; then
+    read -r -p "${q} [${def}]: " val <"${TTY_IN}"
+    val="${val:-${def}}"
+  else
+    read -r -p "${q}: " val <"${TTY_IN}"
+  fi
+  printf -v "${var}" '%s' "${val}"
+  export "${var?}"
+}
+
+prompt_secret() {
+  local var="$1" q="$2" val=""
+  if [[ -n "${!var:-}" ]]; then return 0; fi
+  if [[ "${NONINTERACTIVE:-0}" == "1" ]]; then
+    echo "❌ ${var} not set and NONINTERACTIVE=1" >&2; exit 1
+  fi
+  read -r -s -p "${q}: " val <"${TTY_IN}"; echo
+  printf -v "${var}" '%s' "${val}"
+  export "${var?}"
+}
+
+genpass() { openssl rand -base64 48 | tr -d '=+/\n' | cut -c1-40; }
+
+# --- Domain ---------------------------------------------------------------
+prompt GHOST_URL "Public Ghost URL (e.g. https://blog.example.com)"
+if [[ ! "${GHOST_URL}" =~ ^https?:// ]]; then
+  GHOST_URL="https://${GHOST_URL}"
+fi
+# Strip trailing slash.
+GHOST_URL="${GHOST_URL%/}"
+
+# --- Cloudflare token -----------------------------------------------------
+prompt_secret CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token"
+if [[ ${#CLOUDFLARE_TUNNEL_TOKEN} -lt 40 ]]; then
+  echo "⚠️  Cloudflare token looks short (${#CLOUDFLARE_TUNNEL_TOKEN} chars). Double-check it." >&2
 fi
 
-# Check for Docker
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker is not installed"
-    echo "Install with: curl -fsSL https://get.docker.com | sh"
-    exit 1
+# --- Optional mail --------------------------------------------------------
+: "${MAIL_HOST:=}"
+: "${MAIL_PORT:=587}"
+: "${MAIL_USER:=}"
+: "${MAIL_PASSWORD:=}"
+: "${MAIL_FROM:=}"
+: "${MAIL_SECURE:=false}"
+
+# --- Generate or preserve secrets ----------------------------------------
+if [[ -f .env ]]; then
+  # shellcheck disable=SC1091
+  set -a; source ./.env; set +a
 fi
+GHOST_DB_PASSWORD="${GHOST_DB_PASSWORD:-$(genpass)}"
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(genpass)}"
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(genpass)}"
 
-# Check for Docker Compose
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-    echo "❌ Docker Compose is not installed"
-    echo "Install with: sudo apt-get install -y docker-compose"
-    exit 1
-fi
+# Quote a value for .env so both bash (set -a; source) AND
+# docker compose's dotenv parser interpret it identically.
+# Strategy: wrap in double quotes, backslash-escape \  "  $  `.
+shq() {
+  local v=${1-}
+  v=${v//\\/\\\\}
+  v=${v//\"/\\\"}
+  v=${v//\$/\\\$}
+  v=${v//\`/\\\`}
+  printf '"%s"' "${v}"
+}
 
-echo "✅ Docker is installed"
-echo ""
-
-# Create directories
-echo "Creating required directories..."
-mkdir -p backups scripts
-echo "✅ Directories created"
-echo ""
-
-# Move backup script
-if [ -f "backup.sh" ] && [ ! -f "scripts/backup.sh" ]; then
-    mv backup.sh scripts/
-    chmod +x scripts/backup.sh
-    echo "✅ Backup script configured"
-fi
-
-# Check for .env file
-if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
-        echo "Creating .env file..."
-        cp .env.example .env
-        echo "✅ .env file created from template"
-        echo ""
-        echo "⚠️  IMPORTANT: You must edit .env file with your actual values!"
-        echo ""
-        read -p "Enter your domain (e.g., https://blog.yourdomain.com): " DOMAIN
-        read -p "Enter Cloudflare Tunnel Token: " CF_TOKEN
-
-        # Ensure domain has https:// prefix
-        if [[ ! "$DOMAIN" =~ ^https?:// ]]; then
-            DOMAIN="https://${DOMAIN}"
-        fi
-
-        # Generate random passwords
-        DB_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-        ROOT_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-
-        # Update .env file
-        sed -i "s|GHOST_URL=.*|GHOST_URL=${DOMAIN}|" .env
-        sed -i "s|GHOST_DB_PASSWORD=.*|GHOST_DB_PASSWORD=${DB_PASS}|" .env
-        sed -i "s|MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${ROOT_PASS}|" .env
-        sed -i "s|CLOUDFLARE_TUNNEL_TOKEN=.*|CLOUDFLARE_TUNNEL_TOKEN=${CF_TOKEN}|" .env
-
-        echo "✅ Environment variables configured"
-        echo ""
-        echo "Ghost URL set to: ${DOMAIN}"
-        echo "Generated secure passwords for database"
-        echo ""
-    else
-        echo "❌ .env.example file not found"
-        exit 1
-    fi
-else
-    echo "✅ .env file already exists"
-fi
-
-# Set proper permissions
+# --- Write .env atomically ------------------------------------------------
+umask 077
+TMP="$(mktemp .env.tmp.XXXXXX)"
+{
+  printf '# Ghostberry environment — generated %s\n'   "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '# DO NOT commit this file.\n\n'
+  printf 'GHOST_URL=%s\n\n'                             "$(shq "${GHOST_URL}")"
+  printf 'GHOST_DB_PASSWORD=%s\n'                       "$(shq "${GHOST_DB_PASSWORD}")"
+  printf 'MYSQL_ROOT_PASSWORD=%s\n\n'                   "$(shq "${MYSQL_ROOT_PASSWORD}")"
+  printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\n\n'               "$(shq "${CLOUDFLARE_TUNNEL_TOKEN}")"
+  printf '# Mail (leave blank to disable email features)\n'
+  printf 'MAIL_HOST=%s\n'     "$(shq "${MAIL_HOST}")"
+  printf 'MAIL_PORT=%s\n'     "$(shq "${MAIL_PORT}")"
+  printf 'MAIL_USER=%s\n'     "$(shq "${MAIL_USER}")"
+  printf 'MAIL_PASSWORD=%s\n' "$(shq "${MAIL_PASSWORD}")"
+  printf 'MAIL_FROM=%s\n'     "$(shq "${MAIL_FROM}")"
+  printf 'MAIL_SECURE=%s\n\n' "$(shq "${MAIL_SECURE}")"
+  printf '# Backup encryption (auto-generated). Store this somewhere safe.\n'
+  printf 'BACKUP_ENCRYPTION_KEY=%s\n\n'                 "$(shq "${BACKUP_ENCRYPTION_KEY}")"
+  printf '# Image pins — leave at defaults unless overriding.\n'
+  printf 'GHOST_IMAGE=%s\n'        "$(shq "${GHOST_IMAGE:-ghost:5-alpine}")"
+  printf 'MYSQL_IMAGE=%s\n'        "$(shq "${MYSQL_IMAGE:-mysql:8.0}")"
+  printf 'CLOUDFLARED_IMAGE=%s\n\n' "$(shq "${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}")"
+  printf '# Resource caps (override on low-memory Pis).\n'
+  printf 'GHOST_MEM_LIMIT=%s\n'        "$(shq "${GHOST_MEM_LIMIT:-768m}")"
+  printf 'DB_MEM_LIMIT=%s\n'           "$(shq "${DB_MEM_LIMIT:-512m}")"
+  printf 'CLOUDFLARED_MEM_LIMIT=%s\n'  "$(shq "${CLOUDFLARED_MEM_LIMIT:-128m}")"
+  printf 'MYSQL_BUFFER_POOL=%s\n'      "$(shq "${MYSQL_BUFFER_POOL:-128M}")"
+} > "${TMP}"
+mv "${TMP}" .env
 chmod 600 .env
-echo "✅ Set secure permissions on .env file"
-echo ""
 
-# Verify configuration
-source .env
-WARNINGS=0
+mkdir -p backups
+chmod 700 backups
+chmod +x scripts/*.sh 2>/dev/null || true
 
-if [ "$CLOUDFLARE_TUNNEL_TOKEN" == "your_cloudflare_tunnel_token_here" ]; then
-    echo "⚠️  WARNING: Cloudflare Tunnel token not set!"
-    WARNINGS=$((WARNINGS+1))
-fi
-
-if [ "$GHOST_URL" == "https://blog.yourdomain.com" ]; then
-    echo "⚠️  WARNING: Ghost URL not configured!"
-    WARNINGS=$((WARNINGS+1))
-fi
-
-if [ $WARNINGS -gt 0 ]; then
-    echo ""
-    echo "Please edit .env and configure the required values"
-    echo ""
-fi
-
-echo "========================================="
-echo "Setup Complete!"
-echo "========================================="
-echo ""
-echo "Next steps:"
-echo "1. Verify .env file has correct values: nano .env"
-echo "2. Start Ghost: docker compose up -d"
-echo "3. Check logs: docker compose logs -f"
-echo "4. Access Ghost admin: https://${DOMAIN:-yourdomain.com}/ghost"
-echo ""
-echo "Useful commands:"
-echo "  docker compose ps          - View running services"
-echo "  docker compose logs -f     - Follow logs"
-echo "  docker compose restart     - Restart services"
-echo "  docker compose down        - Stop services"
-echo ""
-echo "For backups, run:"
-echo "  docker compose run --rm db_backup /backup.sh"
-echo ""
+echo "✅ .env written ($(stat -c%a .env 2>/dev/null || stat -f%Lp .env) perms)"
+echo "   GHOST_URL=${GHOST_URL}"

@@ -1,0 +1,20 @@
+[Unit]
+Description=Ghostberry — Ghost CMS + Cloudflare Tunnel
+Documentation=https://github.com/dm807cam/ghostberry
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ghostberry
+EnvironmentFile=-/opt/ghostberry/.env
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=300
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

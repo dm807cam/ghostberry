@@ -274,7 +274,7 @@ df -h
 
 d) Run backup manually:
 ```bash
-docker compose run --rm db_backup /backup.sh
+./scripts/backup.sh
 ```
 
 ## Advanced Debugging

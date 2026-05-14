@@ -1,378 +1,138 @@
-# Ghost CMS on Raspberry Pi with Cloudflare Tunnel
+# Ghostberry
 
-Production-ready Docker Compose setup for running Ghost CMS on a Raspberry Pi, secured behind a Cloudflare Tunnel.
-
-> **🔒 Security Notice**: This deployment follows security best practices including no direct port exposure, container hardening, and encrypted backups. Review [SECURITY.md](SECURITY.md) before production deployment.
-
-## Features
-
-- 🚀 Ghost CMS 5.x (Alpine-based for ARM compatibility)
-- 🔒 Cloudflare Tunnel (zero-trust networking, no ports exposed, DDoS protection)
-- 💾 MySQL 8.0 database with optimized settings for Raspberry Pi
-- 📧 Email support (SMTP configuration)
-- 💪 Health checks and automatic restarts
-- 📦 Automated backup solution with optional encryption
-- 🔐 Environment-based secure configuration
-- 🛡️ Container security hardening (capability dropping, resource limits)
-- 📊 Log rotation to prevent disk exhaustion
-
-## Prerequisites
-
-- Raspberry Pi (3B+ or newer recommended)
-- Raspberry Pi OS (64-bit recommended)
-- Docker and Docker Compose installed
-- Cloudflare account with a domain
-- At least 2GB RAM recommended
-
-## Quick Start
-
-### 1. Install Docker (if not already installed)
+**Production-ready Ghost CMS on a Raspberry Pi, fronted by a Cloudflare Tunnel — installable in one command.**
 
 ```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-newgrp docker
-
-# Install Docker Compose
-sudo apt-get install -y docker-compose
+curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 ```
 
-### 2. Setup Cloudflare Tunnel
+That's it. The installer is idempotent — re-run it any time to update the source or re-sync configuration.
 
-1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
-2. Navigate to **Networks** → **Tunnels**
-3. Click **Create a tunnel**
-4. Choose **Cloudflared** and give it a name (e.g., "ghost-pi")
-5. Copy the tunnel token (you'll need this)
-6. Configure the tunnel:
-   - **Public hostname**: Your domain (e.g., blog.yourdomain.com)
-   - **Service**: `http://ghost:2368`
-7. Save the tunnel
+---
 
-### 3. Run Setup Script (Recommended)
+## What you get
 
-The easiest way to get started:
+- 🐳 **Ghost 5.x** (Alpine, ARM64-native) + **MySQL 8** + **cloudflared**, wired together with Docker Compose
+- 🔒 **Zero exposed ports** — every request reaches Ghost only through your Cloudflare Tunnel (DDoS protection + WAF for free)
+- 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
+- 💾 **Daily encrypted backups** via cron, with a real `restore.sh`
+- 🚀 **systemd unit** for clean boot/shutdown
+- 🍓 **Pi-aware bootstrap** — enables memory cgroups, ensures swap, installs Docker
+
+## Requirements
+
+| | |
+|---|---|
+| Hardware | Raspberry Pi 4 (2 GB+) or 5, **64-bit OS** |
+| OS | Raspberry Pi OS Bookworm (Debian) / Ubuntu Server |
+| Network | A domain on Cloudflare (free plan is fine) |
+| Time | ~5 minutes once you have a tunnel token |
+
+## Prepare a Cloudflare Tunnel
+
+1. Open [Cloudflare Zero Trust → Networks → Tunnels](https://one.dash.cloudflare.com/).
+2. **Create a tunnel** → name it `ghostberry` → pick **Docker** → **copy the token** (the long `eyJ…` string).
+3. Add a **Public hostname**:
+   - **Subdomain / domain:** `blog.example.com`
+   - **Service:** `http://ghost:2368`
+4. Save.
+
+You'll be asked for that token by the installer.
+
+## Install
 
 ```bash
-./setup.sh
+curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 ```
 
-This will:
-- Create `.env` from template
-- Prompt for your domain and Cloudflare token
-- Generate strong database passwords automatically
-- Set proper permissions
-- Create required directories
-
-### 4. Configure Environment Variables (Manual Alternative)
-
-If you prefer to configure manually:
+For a fully unattended run, pre-set the inputs:
 
 ```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit with your actual values
-nano .env
+curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh \
+  | sudo GHOST_URL=https://blog.example.com \
+         CLOUDFLARE_TUNNEL_TOKEN=eyJh... \
+         NONINTERACTIVE=1 \
+         bash
 ```
 
-Update these critical values in `.env`:
-- `GHOST_URL`: Your Ghost blog URL (e.g., `https://blog.yourdomain.com`)
-- `GHOST_DB_PASSWORD`: Strong database password (32+ characters)
-- `MYSQL_ROOT_PASSWORD`: Strong root password (32+ characters)
-- `CLOUDFLARE_TUNNEL_TOKEN`: Token from Cloudflare dashboard
-- Mail settings (if you want email notifications)
+Optional flags:
 
-**Note**: With the new `.env` configuration, you no longer need to edit `docker-compose.yml` directly!
+| Flag / env | Effect |
+|---|---|
+| `--harden` | Enables `ufw` (deny-incoming + allow SSH) and `unattended-upgrades` |
+| `INSTALL_DIR=/srv/ghost` | Install somewhere other than `/opt/ghostberry` |
+| `GHOSTBERRY_REF=v1.2.3` | Pin to a specific git ref |
+| `SKIP_DOCKER=1` | Skip the Docker install step |
 
-### 5. Start the Services
+After install, browse to `https://blog.example.com/ghost` to create the admin account.
+
+## Daily life
 
 ```bash
-# Start all services
-docker compose up -d
+cd /opt/ghostberry
 
-# Check logs
-docker compose logs -f
-
-# Verify services are running
+# Status / logs
+sudo systemctl status ghostberry
 docker compose ps
-```
-
-### 6. (Optional) Enable Auto-Start on Boot
-
-For production deployments, enable Ghost to start automatically when your Raspberry Pi boots:
-
-```bash
-# Edit the service file to set your installation path
-nano ghost.service
-
-# Install and enable the service
-sudo cp ghost.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable ghost.service
-sudo systemctl start ghost.service
-```
-
-See [SYSTEMD-SERVICE.md](SYSTEMD-SERVICE.md) for detailed instructions.
-
-### 7. Access Ghost Admin
-
-1. Wait about 30-60 seconds for all services to start
-2. Navigate to `https://yourdomain.com/ghost`
-3. Create your admin account
-4. Start blogging!
-
-## Management Commands
-
-### View Logs
-```bash
-# All services
 docker compose logs -f
 
-# Specific service
-docker compose logs -f ghost
-docker compose logs -f cloudflared
+# Manual backup (cron already runs one nightly)
+./scripts/backup.sh
+
+# Restore from a backup
+./scripts/restore.sh backups/ghost_backup_20260514T021700Z.tar.gz
+
+# Update Ghost / MySQL / cloudflared images
+./scripts/update.sh
 ```
 
-### Restart Services
-```bash
-# Restart all
-docker compose restart
+## File layout
 
-# Restart specific service
-docker compose restart ghost
+```
+/opt/ghostberry/
+├── docker-compose.yml      # services, healthchecks, hardening
+├── .env                    # secrets — chmod 600, never commit
+├── ghostberry.service      # systemd unit (installed to /etc/systemd/system/)
+├── install.sh              # one-shot bootstrapper
+├── setup.sh                # idempotent .env writer
+├── scripts/
+│   ├── backup.sh           # mysqldump + content tar, optional AES-256
+│   ├── restore.sh          # inverse of backup
+│   └── update.sh           # backup → pull → up -d → wait healthy
+├── guides/
+│   ├── SECURITY.md
+│   ├── BACKUP.md
+│   └── TROUBLESHOOTING.md
+└── backups/                # local archives (chmod 700)
 ```
 
-### Stop Services
-```bash
-docker compose down
-```
+## Security model
 
-### Update Ghost
-```bash
-# Pull latest images
-docker compose pull
+- **No published ports.** Nothing on the Pi listens publicly. The only way in is the Cloudflare Tunnel.
+- **Container hardening:** all services drop `ALL` capabilities and re-add only what's needed; `no-new-privileges` set; memory caps enforced.
+- **Secrets** live only in `.env` (mode `600`) and are never baked into images.
+- **Backups** are AES-256-encrypted via OpenSSL (`pbkdf2`, 200k iters) with an auto-generated 40-char passphrase stored in `.env`. Back that file up somewhere safe.
+- **Optional `--harden`** flag turns on the host firewall and unattended security upgrades.
 
-# Recreate containers
-docker compose up -d
-```
-
-## Backup & Restore
-
-### Create Backup
-```bash
-# Manual backup
-docker compose run --rm db_backup /backup.sh
-
-# Check backups
-ls -lh backups/
-```
-
-### Automated Backups (Cron)
-```bash
-# Edit crontab
-crontab -e
-
-# Add this line for daily backups at 2 AM
-0 2 * * * cd /path/to/ghost && /usr/bin/docker compose run --rm db_backup /backup.sh >> /var/log/ghost-backup.log 2>&1
-```
-
-### Restore from Backup
-```bash
-# Stop Ghost to prevent database changes
-docker compose stop ghost
-
-# Restore the backup
-gunzip < backups/ghost_backup_YYYYMMDD_HHMMSS.sql.gz | \
-docker compose exec -T db mysql -u ghost -p${GHOST_DB_PASSWORD} ghost
-
-# Restart Ghost
-docker compose start ghost
-```
+Full detail in [guides/SECURITY.md](guides/SECURITY.md).
 
 ## Troubleshooting
 
-### Ghost won't start
-```bash
-# Check logs
-docker compose logs ghost
+- Ghost not coming up? `sudo journalctl -u ghostberry -e` and `docker compose logs ghost`.
+- Tunnel red in the Cloudflare dashboard? `docker compose logs cloudflared` — usually a bad token.
+- Out-of-memory on a 2 GB Pi? Lower `GHOST_MEM_LIMIT`/`MYSQL_BUFFER_POOL` in `.env`, then `docker compose up -d`.
 
-# Verify database is ready
-docker compose exec db mysqladmin ping -h localhost -u ghost -p
-```
+More in [guides/TROUBLESHOOTING.md](guides/TROUBLESHOOTING.md).
 
-### Cloudflare Tunnel not connecting
-```bash
-# Check cloudflared logs
-docker compose logs cloudflared
-
-# Verify token is correct in .env file
-grep CLOUDFLARE_TUNNEL_TOKEN .env
-
-# Restart cloudflared
-docker compose restart cloudflared
-```
-
-### Out of Memory (Raspberry Pi)
-```bash
-# Check memory usage
-docker stats
-
-# Reduce MySQL buffer pool (in docker-compose.yml)
-# Change: --innodb-buffer-pool-size=128M to 64M
-```
-
-### Database connection errors
-```bash
-# Check database health
-docker compose exec db mysqladmin ping -h localhost -u ghost -p
-
-# Restart database
-docker compose restart db
-
-# Wait for health check, then restart Ghost
-docker compose restart ghost
-```
-
-## Performance Optimization for Raspberry Pi
-
-The Docker Compose file includes optimizations for Raspberry Pi:
-- MySQL performance schema disabled
-- Reduced InnoDB buffer pool (128MB)
-- Alpine-based Ghost image (smaller footprint)
-- Health checks to ensure services are ready
-
-### Additional Tweaks
-If you experience performance issues:
-
-1. **Reduce MySQL memory**:
-   - Change `--innodb-buffer-pool-size=128M` to `64M`
-
-2. **Enable swap** (if not already enabled):
-```bash
-sudo dphys-swapfile swapoff
-sudo nano /etc/dphys-swapfile
-# Set CONF_SWAPSIZE=2048
-sudo dphys-swapfile setup
-sudo dphys-swapfile swapon
-```
-
-3. **Monitor resources**:
-```bash
-docker stats
-```
-
-## Security Best Practices
-
-For comprehensive security documentation, see [SECURITY.md](SECURITY.md).
-
-**Critical Security Requirements**:
-
-1. ✅ **Use strong passwords** (32+ characters) in `.env`
-2. ✅ **Protect .env file**: `chmod 600 .env` and verify it's in `.gitignore`
-3. ✅ **Never commit secrets** to version control
-4. ✅ **No direct port exposure**: Ghost is ONLY accessible via Cloudflare Tunnel
-   - For local troubleshooting: `docker compose exec ghost wget http://localhost:2368`
-5. ✅ **Enable backup encryption**: Set `BACKUP_ENCRYPTION_KEY` in `.env`
-6. ✅ **Regularly update images**: `docker compose pull && docker compose up -d`
-7. ✅ **Enable automatic backups** with cron (see Backup section)
-8. ✅ **Monitor logs** for suspicious activity
-9. ✅ **Keep Raspberry Pi OS updated**: `sudo apt update && sudo apt upgrade`
-10. ✅ **Configure Cloudflare WAF rules** and rate limiting
-
-**Resource Limits**: Containers have memory and CPU limits configured for Raspberry Pi. Adjust in `docker-compose.yml` if needed.
-
-**Container Hardening**: All containers run with:
-- Dropped capabilities (principle of least privilege)
-- `no-new-privileges` flag
-- Log rotation (prevents disk exhaustion)
-- Specific version pinning (no :latest tags)
-
-## Email Configuration
-
-Ghost needs email to send notifications, password resets, etc. Configure one of these providers:
-
-### Mailgun (Recommended)
-```env
-MAIL_HOST=smtp.mailgun.org
-MAIL_PORT=587
-MAIL_USER=postmaster@mg.yourdomain.com
-MAIL_PASSWORD=your_mailgun_password
-```
-
-### Gmail
-```env
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USER=your.email@gmail.com
-MAIL_PASSWORD=your_app_specific_password
-```
-
-### SendGrid
-```env
-MAIL_HOST=smtp.sendgrid.net
-MAIL_PORT=587
-MAIL_USER=apikey
-MAIL_PASSWORD=your_sendgrid_api_key
-```
-
-## Monitoring
-
-### Check Service Health
-```bash
-# Service status
-docker compose ps
-
-# Health checks
-docker inspect ghost | grep -A 10 Health
-docker inspect ghost_db | grep -A 10 Health
-```
-
-### Resource Usage
-```bash
-# Real-time stats
-docker stats
-
-# Disk usage
-docker system df
-```
-
-## Updating
+## Uninstall
 
 ```bash
-# Backup first!
-docker compose run --rm db_backup /backup.sh
-
-# Pull new images
-docker compose pull
-
-# Recreate containers
-docker compose up -d
-
-# Check logs
-docker compose logs -f
+sudo systemctl disable --now ghostberry
+sudo rm /etc/systemd/system/ghostberry.service /etc/cron.d/ghostberry-backup
+cd /opt/ghostberry && docker compose down -v
+sudo rm -rf /opt/ghostberry
 ```
-
-## File Structure
-
-```
-.
-├── docker-compose.yml      # Main Docker Compose configuration
-├── .env                    # Environment variables (create from .env.example)
-├── .env.example           # Template for environment variables
-├── backups/               # Database backup directory
-│   └── ghost_backup_*.sql.gz
-└── scripts/
-    └── backup.sh          # Backup script
-```
-
-## Support
-
-- Ghost Documentation: https://ghost.org/docs/
-- Cloudflare Tunnel Docs: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
-- Docker Compose: https://docs.docker.com/compose/
 
 ## License
 
-This configuration is provided as-is for your use. Ghost CMS is licensed under the MIT License.
+MIT — see [LICENSE](LICENSE). Ghost is © Ghost Foundation, MIT-licensed.

@@ -1,32 +1,30 @@
 services:
   ghost:
-    # Pin to specific version for predictability and security
-    image: ghost:5.96.0-alpine
+    image: ${GHOST_IMAGE:-ghost:5-alpine}
     container_name: ghost
     restart: unless-stopped
-    # SECURITY: Port removed - Ghost should ONLY be accessible via Cloudflare Tunnel
-    # This prevents direct access bypassing DDoS protection and WAF
-    # For local troubleshooting: docker compose exec ghost wget http://localhost:2368
     environment:
-      # Basic Ghost configuration
-      url: ${GHOST_URL:-https://yourdomain.com}
+      url: ${GHOST_URL}
       NODE_ENV: production
 
-      # Database configuration
       database__client: mysql
       database__connection__host: db
       database__connection__user: ghost
       database__connection__password: ${GHOST_DB_PASSWORD}
       database__connection__database: ghost
 
-      # Mail configuration (using Mailgun example - adjust as needed)
-      mail__transport: SMTP
-      mail__options__service: Mailgun
-      mail__options__host: ${MAIL_HOST:-smtp.mailgun.org}
+      # Behind Cloudflare Tunnel — trust forwarded headers for correct client IPs.
+      server__host: 0.0.0.0
+      server__port: 2368
+
+      # Mail — generic SMTP. Leave MAIL_* unset to disable email entirely.
+      mail__transport: ${MAIL_TRANSPORT:-SMTP}
+      mail__from: ${MAIL_FROM:-}
+      mail__options__host: ${MAIL_HOST:-}
       mail__options__port: ${MAIL_PORT:-587}
-      mail__options__auth__user: ${MAIL_USER}
-      mail__options__auth__pass: ${MAIL_PASSWORD}
-      mail__from: ${MAIL_FROM:-noreply@yourdomain.com}
+      mail__options__secure: ${MAIL_SECURE:-false}
+      mail__options__auth__user: ${MAIL_USER:-}
+      mail__options__auth__pass: ${MAIL_PASSWORD:-}
     volumes:
       - ghost_content:/var/lib/ghost/content
     depends_on:
@@ -35,12 +33,16 @@ services:
     networks:
       - ghost_network
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get({host: 'localhost', port: 2368, path: '/ghost/api/admin/site/', headers: {'X-Forwarded-Proto': 'https'}}, (res) => {process.exit(res.statusCode === 200 ? 0 : 1);}).on('error', () => {process.exit(1);})\""]
+      test:
+        - CMD-SHELL
+        - >
+          node -e "require('http').get({host:'localhost',port:2368,path:'/ghost/api/admin/site/',headers:{'X-Forwarded-Proto':'https'}},r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 40s
-    # Security hardening
+      start_period: 90s
+    mem_limit: ${GHOST_MEM_LIMIT:-768m}
+    mem_reservation: 256m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -49,18 +51,15 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-      - NET_BIND_SERVICE
       - DAC_OVERRIDE
-    # Logging configuration to prevent disk exhaustion
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
   db:
-    # Pin to specific version for stability
-    image: mysql:8.0.36
+    image: ${MYSQL_IMAGE:-mysql:8.0}
     container_name: ghost_db
     restart: unless-stopped
     environment:
@@ -75,15 +74,16 @@ services:
     command:
       - '--default-authentication-plugin=mysql_native_password'
       - '--performance-schema=OFF'
-      - '--innodb-buffer-pool-size=128M'
+      - '--innodb-buffer-pool-size=${MYSQL_BUFFER_POOL:-128M}'
+      - '--max-connections=50'
     healthcheck:
-      # SECURITY: Health check without password exposure in process list
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    # Security hardening
+      retries: 10
+      start_period: 60s
+    mem_limit: ${DB_MEM_LIMIT:-512m}
+    mem_reservation: 256m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -94,80 +94,40 @@ services:
       - SETUID
       - DAC_OVERRIDE
       - SETFCAP
-      - NET_RAW
       - SYS_NICE
-    # Logging configuration
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
   cloudflared:
-    # Pin to specific version instead of :latest
-    # Check for updates at: https://github.com/cloudflare/cloudflared/releases
-    image: cloudflare/cloudflared:2024.12.2
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}
     container_name: cloudflared
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+      TUNNEL_METRICS: 0.0.0.0:2000
     networks:
       - ghost_network
     depends_on:
       ghost:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep cloudflared || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    # Security hardening
+    # No healthcheck: the distroless cloudflared image has no shell and no curl/wget.
+    # restart: unless-stopped + tunnel reconnect logic is sufficient.
+    mem_limit: ${CLOUDFLARED_MEM_LIMIT:-128m}
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    # Logging configuration
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "5m"
         max-file: "3"
-
-  # Backup service - run manually for complete Ghost backup
-  ghost_backup:
-    image: ghost:5.96.0-alpine
-    container_name: ghost_backup
-    restart: "no"
-    environment:
-      GHOST_DB_PASSWORD: ${GHOST_DB_PASSWORD}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
-    volumes:
-      - ./backups:/backups
-      - ./scripts/backup.sh:/backup.sh:ro
-      - ghost_content:/var/lib/ghost/content:ro
-    networks:
-      - ghost_network
-    depends_on:
-      - ghost
-      - db
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - "echo 'Backup container ready. Run: docker compose run --rm ghost_backup /backup.sh'"
-    profiles:
-      - backup
-    # Security hardening for backup container
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
 
 volumes:
   ghost_content:
