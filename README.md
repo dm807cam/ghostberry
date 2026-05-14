@@ -45,15 +45,22 @@ You'll be asked for that token by the installer.
 curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 ```
 
-For a fully unattended run, pre-set the inputs:
+The installer interactively asks for your domain, Cloudflare Tunnel token, and (optionally) SMTP credentials — skip SMTP if you don't have any yet, you can add it later by editing `.env`.
+
+For a fully unattended run, pre-set everything:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh \
   | sudo GHOST_URL=https://blog.example.com \
          CLOUDFLARE_TUNNEL_TOKEN=eyJh... \
+         MAIL_HOST=smtp.postmarkapp.com \
+         MAIL_USER=<token> MAIL_PASSWORD=<token> \
+         MAIL_FROM=blog@example.com \
          NONINTERACTIVE=1 \
          bash
 ```
+
+(Mail vars are optional — omit them all to install without email features.)
 
 Optional flags:
 

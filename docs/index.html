@@ -369,6 +369,16 @@
     </details>
 
     <details>
+      <summary>Can I add my SMTP credentials during install?</summary>
+      <p>Yes. The installer prompts you with an optional SMTP section after the
+      Cloudflare token — host, port, username, password, from-address. Skip it and Ghost still
+      runs; mail features just stay off until you add the values to <code>.env</code> later.
+      For unattended installs, pre-set <code>MAIL_HOST</code>, <code>MAIL_USER</code>,
+      <code>MAIL_PASSWORD</code>, <code>MAIL_FROM</code> as environment variables and the
+      prompt is skipped automatically.</p>
+    </details>
+
+    <details>
       <summary>How are secrets handled?</summary>
       <p>Everything sensitive lives in <code>/opt/ghostberry/.env</code>, mode <code>600</code>,
       owned by your user. Database passwords and the backup encryption key are generated locally

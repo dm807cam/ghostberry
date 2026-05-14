@@ -60,7 +60,15 @@ if [[ ${#CLOUDFLARE_TUNNEL_TOKEN} -lt 40 ]]; then
   echo "⚠️  Cloudflare token looks short (${#CLOUDFLARE_TUNNEL_TOKEN} chars). Double-check it." >&2
 fi
 
+# --- Load existing .env (so re-runs preserve prior values) ---------------
+if [[ -f .env ]]; then
+  # shellcheck disable=SC1091
+  set -a; source ./.env; set +a
+fi
+
 # --- Optional mail --------------------------------------------------------
+# SMTP is fully optional — Ghost runs without it, but password resets and
+# member email confirmations won't work until it's configured.
 : "${MAIL_HOST:=}"
 : "${MAIL_PORT:=587}"
 : "${MAIL_USER:=}"
@@ -68,11 +76,36 @@ fi
 : "${MAIL_FROM:=}"
 : "${MAIL_SECURE:=false}"
 
-# --- Generate or preserve secrets ----------------------------------------
-if [[ -f .env ]]; then
-  # shellcheck disable=SC1091
-  set -a; source ./.env; set +a
+ask_yn() {
+  # ask_yn "Question" default(y|n) → answer in REPLY (y or n)
+  local q="$1" def="${2:-n}" hint="[y/N]" ans=""
+  [[ "${def}" == "y" ]] && hint="[Y/n]"
+  if [[ "${NONINTERACTIVE:-0}" == "1" ]]; then REPLY="${def}"; return; fi
+  read -r -p "${q} ${hint} " ans <"${TTY_IN}"
+  ans="${ans:-${def}}"
+  case "${ans}" in y|Y|yes|YES) REPLY=y ;; *) REPLY=n ;; esac
+}
+
+# Skip the prompt if SMTP was pre-supplied via env vars or already in .env.
+if [[ -z "${MAIL_HOST}" && "${NONINTERACTIVE:-0}" != "1" ]]; then
+  echo
+  echo "📧 SMTP (optional) — needed for password resets, member invitations,"
+  echo "   and magic-link sign-in. You can skip this and add it later in .env."
+  echo "   Works with any SMTP provider: Postmark, Brevo, Mailgun, SendGrid,"
+  echo "   Fastmail, Gmail (app password), iCloud, your own MTA, etc."
+  ask_yn "   Configure SMTP now?" n
+  if [[ "${REPLY}" == "y" ]]; then
+    prompt        MAIL_HOST     "   SMTP host (e.g. smtp.postmarkapp.com)"
+    prompt        MAIL_PORT     "   SMTP port" "587"
+    prompt        MAIL_USER     "   SMTP username"
+    prompt_secret MAIL_PASSWORD "   SMTP password / API key"
+    prompt        MAIL_FROM     "   From address (e.g. blog@example.com)"
+    ask_yn        "   Use implicit TLS (port 465)?" n
+    if [[ "${REPLY}" == "y" ]]; then MAIL_SECURE=true; else MAIL_SECURE=false; fi
+  fi
 fi
+
+# --- Generate any still-missing secrets ----------------------------------
 GHOST_DB_PASSWORD="${GHOST_DB_PASSWORD:-$(genpass)}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(genpass)}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(genpass)}"
