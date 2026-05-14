@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghostberry — Ghost CMS on a Raspberry Pi, in one command</title>
+<meta name="description" content="Production-ready Ghost CMS on Raspberry Pi, fronted by a Cloudflare Tunnel. One-shot installer, hardened containers, encrypted daily backups.">
+<meta property="og:title" content="Ghostberry">
+<meta property="og:description" content="Production-ready Ghost CMS on a Raspberry Pi, installable in one command.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dm807cam.github.io/ghostberry/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%BB%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0e0f12;
+    --bg-2: #16181d;
+    --bg-3: #1d2027;
+    --fg: #e8eaf0;
+    --fg-dim: #9aa0ad;
+    --accent: #ff5c8a;
+    --accent-2: #c4f88d;
+    --border: #262a33;
+    --code: #0a0b0e;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fafafa;
+      --bg-2: #ffffff;
+      --bg-3: #f1f2f5;
+      --fg: #14161a;
+      --fg-dim: #555a66;
+      --accent: #d62a5f;
+      --accent-2: #4c8a1a;
+      --border: #e3e5ea;
+      --code: #f5f6f9;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  header.site {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  header.site .container {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { font-weight: 700; letter-spacing: -0.01em; font-size: 18px; color: var(--fg); }
+  .brand .dot { color: var(--accent); }
+  nav.site a { color: var(--fg-dim); margin-left: 20px; font-size: 14px; }
+  nav.site a:hover { color: var(--fg); text-decoration: none; }
+
+  /* HERO */
+  section.hero { padding: 88px 0 56px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: clamp(36px, 6vw, 60px);
+    line-height: 1.05;
+    margin: 0 0 16px;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+  h1 .accent { color: var(--accent); }
+  .lede {
+    font-size: clamp(17px, 2vw, 20px);
+    color: var(--fg-dim);
+    max-width: 640px;
+    margin: 0 0 32px;
+  }
+
+  /* INSTALL BLOCK */
+  .install {
+    background: var(--code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; align-items: stretch;
+    overflow: hidden;
+    max-width: 100%;
+  }
+  .install pre {
+    margin: 0;
+    padding: 18px 20px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--fg);
+    overflow-x: auto;
+    flex: 1;
+    white-space: pre;
+  }
+  .install pre .prompt { color: var(--fg-dim); user-select: none; }
+  .install pre .cmd { color: var(--accent-2); }
+  .install button {
+    background: transparent;
+    color: var(--fg-dim);
+    border: 0;
+    border-left: 1px solid var(--border);
+    padding: 0 18px;
+    font-size: 13px;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+    min-width: 84px;
+  }
+  .install button:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+  .install button.copied { color: var(--accent-2); }
+
+  .micro {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--fg-dim);
+  }
+  .micro code { font-family: var(--mono); font-size: 12px; background: var(--bg-3); padding: 1px 6px; border-radius: 4px; }
+
+  /* CTA ROW */
+  .cta-row {
+    margin-top: 32px;
+    display: flex; gap: 12px; flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--bg-2);
+  }
+  .btn:hover { text-decoration: none; border-color: var(--fg-dim); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+
+  /* FEATURES */
+  section.features { padding: 72px 0; border-top: 1px solid var(--border); }
+  h2 {
+    font-size: clamp(24px, 3.4vw, 32px);
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  h2 + p.sub { color: var(--fg-dim); margin: 0 0 40px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+  }
+  .card .icon { font-size: 20px; margin-bottom: 10px; display: block; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card p { margin: 0; color: var(--fg-dim); font-size: 14px; }
+
+  /* STEPS */
+  section.steps { padding: 72px 0; border-top: 1px solid var(--border); }
+  ol.steps {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; gap: 20px;
+    counter-reset: step;
+  }
+  ol.steps li {
+    counter-increment: step;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px 22px 64px;
+    position: relative;
+  }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute; left: 20px; top: 20px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: grid; place-items: center;
+    font-size: 13px; font-weight: 700;
+  }
+  ol.steps li h3 { margin: 0 0 4px; font-size: 16px; }
+  ol.steps li p { margin: 0; color: var(--fg-dim); font-size: 14px; }
+  ol.steps code {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--code); padding: 2px 6px; border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* FAQ */
+  section.faq { padding: 72px 0; border-top: 1px solid var(--border); }
+  details {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; color: var(--fg-dim); font-weight: 400; font-size: 20px; }
+  details[open] summary::after { content: "−"; }
+  details > p { color: var(--fg-dim); margin: 10px 0 0; font-size: 14.5px; }
+  details code { font-family: var(--mono); font-size: 12.5px; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+
+  /* FOOTER */
+  footer.site {
+    padding: 40px 0 56px;
+    border-top: 1px solid var(--border);
+    color: var(--fg-dim);
+    font-size: 13px;
+  }
+  footer.site .container {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  }
+  footer.site a { color: var(--fg-dim); }
+  footer.site a:hover { color: var(--fg); }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="container">
+    <div class="brand">👻 Ghostberry<span class="dot">.</span></div>
+    <nav class="site">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/dm807cam/ghostberry">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow">Ghost CMS · Raspberry Pi · Cloudflare Tunnel</span>
+    <h1>Self-hosted blog,<br><span class="accent">one command</span> away.</h1>
+    <p class="lede">
+      Ghostberry installs a production-ready Ghost CMS on your Raspberry Pi, fronted by a
+      Cloudflare Tunnel — no exposed ports, hardened containers, encrypted nightly backups.
+    </p>
+
+    <div class="install" aria-label="Install command">
+      <pre id="cmd"><span class="prompt">$ </span><span class="cmd">curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash</span></pre>
+      <button id="copy" type="button" aria-label="Copy install command">Copy</button>
+    </div>
+    <p class="micro">
+      Works on Raspberry Pi OS Bookworm (64-bit) and Debian / Ubuntu. Add
+      <code>--harden</code> for ufw + unattended-upgrades.
+    </p>
+
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/dm807cam/ghostberry">View on GitHub →</a>
+      <a class="btn" href="https://github.com/dm807cam/ghostberry/blob/main/guides/SECURITY.md">Security model</a>
+      <a class="btn" href="https://github.com/dm807cam/ghostberry/blob/main/guides/BACKUP.md">Backup &amp; restore</a>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <h2>What's in the box</h2>
+    <p class="sub">Sensible defaults for a homelab that you'd actually trust in production.</p>
+    <div class="grid">
+      <div class="card">
+        <span class="icon">🔒</span>
+        <h3>Zero exposed ports</h3>
+        <p>Traffic only reaches Ghost through your Cloudflare Tunnel. DDoS protection and WAF for free.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🛡️</span>
+        <h3>Hardened containers</h3>
+        <p>All capabilities dropped by default, <code>no-new-privileges</code>, memory caps, log rotation.</p>
+      </div>
+      <div class="card">
+        <span class="icon">💾</span>
+        <h3>Encrypted backups</h3>
+        <p>Nightly mysqldump + content tar, AES-256 via OpenSSL pbkdf2. <code>restore.sh</code> included.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🚀</span>
+        <h3>Systemd-native</h3>
+        <p>Starts on boot, restarts on failure, integrates with <code>journalctl</code> like anything else.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🍓</span>
+        <h3>Pi-aware bootstrap</h3>
+        <p>Enables memory cgroups, ensures 2 GB swap, installs Docker — all idempotent.</p>
+      </div>
+      <div class="card">
+        <span class="icon">📦</span>
+        <h3>One-file config</h3>
+        <p>Everything tunable lives in <code>.env</code> — image pins, memory caps, mail, retention.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="steps" id="how">
+  <div class="container">
+    <h2>How it works</h2>
+    <p class="sub">Three things to do — the installer handles the rest.</p>
+    <ol class="steps">
+      <li>
+        <h3>Flash 64-bit Raspberry Pi OS</h3>
+        <p>Pi 4 (2 GB+) or Pi 5. Enable SSH, log in. That's the only manual prep.</p>
+      </li>
+      <li>
+        <h3>Create a Cloudflare Tunnel</h3>
+        <p>In the Zero Trust dashboard → Networks → Tunnels. Add a public hostname pointing to
+        <code>http://ghost:2368</code>. Copy the tunnel token.</p>
+      </li>
+      <li>
+        <h3>Run the installer</h3>
+        <p>Paste the one-liner, give it your domain and the token, wait ~3 minutes. Then visit
+        <code>https://your-domain/ghost</code> to create your admin account.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="container">
+    <h2>FAQ</h2>
+    <p class="sub">The questions that come up before you commit to running the script.</p>
+
+    <details>
+      <summary>What does the installer actually do?</summary>
+      <p>It checks you're on Debian/Pi OS aarch64, enables memory cgroups in the boot cmdline if
+      missing, ensures ≥ 2 GB of swap, installs Docker via the official convenience script, clones
+      the repo to <code>/opt/ghostberry</code>, writes <code>.env</code> (with auto-generated
+      40-char DB passwords and a backup encryption key), installs a systemd unit, drops a daily
+      backup cron, and starts the stack. Re-run it any time — it's idempotent.</p>
+    </details>
+
+    <details>
+      <summary>Why Cloudflare Tunnel?</summary>
+      <p>Your Pi never opens an inbound port. The tunnel makes an outbound connection to
+      Cloudflare; their edge routes requests back through it. You get DDoS protection, a WAF,
+      and TLS without managing certificates — and you can put Cloudflare Access in front of
+      <code>/ghost</code> if you want SSO on the admin panel.</p>
+    </details>
+
+    <details>
+      <summary>How are secrets handled?</summary>
+      <p>Everything sensitive lives in <code>/opt/ghostberry/.env</code>, mode <code>600</code>,
+      owned by your user. Database passwords and the backup encryption key are generated locally
+      with OpenSSL — they never leave the device.</p>
+    </details>
+
+    <details>
+      <summary>What if I lose the Pi?</summary>
+      <p>Restore from a backup archive on a fresh Pi. The encryption key in <code>.env</code> is
+      the only thing you must back up out-of-band — keep it in your password manager. The
+      installer + your encrypted archive get you back to identical state.</p>
+    </details>
+
+    <details>
+      <summary>Will it run on a Pi Zero / 32-bit OS?</summary>
+      <p>No. Ghost and MySQL 8 require 64-bit ARM and at least ~1.5 GB of RAM in practice. A Pi 4
+      with 2 GB works; 4 GB is comfortable.</p>
+    </details>
+
+    <details>
+      <summary>Is curl-piped-to-bash safe?</summary>
+      <p>You're trusting this repo either way — the alternative (clone, then run) executes the
+      same code. If you'd rather inspect first, the script is plain bash:
+      <a href="https://github.com/dm807cam/ghostberry/blob/main/install.sh">read install.sh on GitHub</a>
+      before piping it.</p>
+    </details>
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <div class="container">
+    <div>MIT licensed. Ghost is © Ghost Foundation.</div>
+    <div>
+      <a href="https://github.com/dm807cam/ghostberry">Source</a> ·
+      <a href="https://github.com/dm807cam/ghostberry/issues">Issues</a> ·
+      <a href="https://ghost.org/">Ghost</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (() => {
+    const btn = document.getElementById('copy');
+    const cmd = 'curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash';
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(cmd);
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1600);
+      } catch (e) {
+        btn.textContent = 'Press ⌘C';
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector('#cmd .cmd'));
+        sel.removeAllRanges(); sel.addRange(range);
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
