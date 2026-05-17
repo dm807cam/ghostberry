@@ -182,15 +182,20 @@ systemctl enable --now docker
 # ----------------------------------------------------------------------------
 log "Fetching ghostberry into ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
-chown "${GHOSTBERRY_USER}":"${GHOSTBERRY_USER}" "${INSTALL_DIR}"
+# Recursive: previous runs may have left mixed ownership (e.g. root-owned
+# files from a botched install) which would break the sudo -u git calls below.
+chown -R "${GHOSTBERRY_USER}":"${GHOSTBERRY_USER}" "${INSTALL_DIR}"
 
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
+  if ! sudo -u "${GHOSTBERRY_USER}" git -C "${INSTALL_DIR}" diff --quiet HEAD -- 2>/dev/null; then
+    warn "${INSTALL_DIR} has local modifications — they will be discarded by 'git reset --hard'."
+  fi
   sudo -u "${GHOSTBERRY_USER}" git -C "${INSTALL_DIR}" fetch --depth=1 origin "${GHOSTBERRY_REF}"
   sudo -u "${GHOSTBERRY_USER}" git -C "${INSTALL_DIR}" reset --hard "origin/${GHOSTBERRY_REF}"
 else
   # If the dir already has files (e.g. running this script from inside a clone),
-  # don't blow them away — just initialize.
-  if compgen -G "${INSTALL_DIR}/*" > /dev/null; then
+  # don't blow them away — just initialize. Use ls -A so dotfiles count too.
+  if [[ -n "$(ls -A "${INSTALL_DIR}" 2>/dev/null)" ]]; then
     warn "${INSTALL_DIR} is not empty and not a git repo; using existing contents."
   else
     sudo -u "${GHOSTBERRY_USER}" git clone --depth=1 --branch "${GHOSTBERRY_REF}" "${GIT_URL}" "${INSTALL_DIR}"
@@ -263,7 +268,8 @@ if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
   log "Waiting for Ghost to become healthy (up to 5 minutes)"
   HEALTHY=0
   for _ in $(seq 1 60); do
-    if (cd "${INSTALL_DIR}" && docker compose ps ghost 2>/dev/null | grep -q '(healthy)'); then
+    status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{end}}' ghost 2>/dev/null || true)"
+    if [[ "${status}" == "healthy" ]]; then
       HEALTHY=1; break
     fi
     sleep 5
@@ -277,7 +283,8 @@ if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
   fi
 fi
 
-GHOST_URL_DISPLAY="$(grep -E '^GHOST_URL=' "${INSTALL_DIR}/.env" | cut -d= -f2-)"
+# Strip surrounding quotes from the shq-quoted value before displaying.
+GHOST_URL_DISPLAY="$(grep -E '^GHOST_URL=' "${INSTALL_DIR}/.env" | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
 
 cat <<EOF
 

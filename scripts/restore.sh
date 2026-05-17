@@ -75,7 +75,8 @@ echo "▶ Ensuring database is up"
 compose up -d db
 # Wait for db healthcheck
 for _ in $(seq 1 60); do
-  if compose ps db | grep -q "(healthy)"; then break; fi
+  status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{end}}' ghost_db 2>/dev/null || true)"
+  if [[ "${status}" == "healthy" ]]; then break; fi
   sleep 2
 done
 
@@ -89,13 +90,21 @@ gunzip -c "${WORK}/database.sql.gz" \
 
 echo "▶ Restoring content volume"
 # Use a transient container with the same ghost_content volume mount, no deps.
+# Stage into a sibling directory first so a torn tar leaves the live content
+# intact; only swap after extraction succeeds.
 compose run --rm --no-deps -T \
   -v "${WORK}:/restore-src:ro" \
   --entrypoint sh ghost -c '
     set -e
-    cd /var/lib/ghost/content
-    find . -mindepth 1 -delete
-    tar -xzf /restore-src/content.tar.gz -C /var/lib/ghost/content
+    STAGE=/var/lib/ghost/content/.restore-stage
+    rm -rf "$STAGE"
+    mkdir -p "$STAGE"
+    tar -xzf /restore-src/content.tar.gz -C "$STAGE"
+    # Swap: remove old entries (except the stage), then move staged contents up.
+    find /var/lib/ghost/content -mindepth 1 -maxdepth 1 ! -name .restore-stage -exec rm -rf {} +
+    # Move both regular and dotfiles (busybox sh has no shopt; use find).
+    find "$STAGE" -mindepth 1 -maxdepth 1 -exec mv {} /var/lib/ghost/content/ \;
+    rmdir "$STAGE"
   '
 
 echo "▶ Starting Ghost"

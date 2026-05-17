@@ -26,7 +26,8 @@ compose up -d
 
 echo "▶ Waiting for Ghost to become healthy"
 for _ in $(seq 1 60); do
-  if compose ps ghost | grep -q "(healthy)"; then
+  status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{end}}' ghost 2>/dev/null || true)"
+  if [[ "${status}" == "healthy" ]]; then
     echo "✅ Ghost is healthy"
     exit 0
   fi

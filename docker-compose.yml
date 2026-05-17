@@ -17,8 +17,10 @@ services:
       server__host: 0.0.0.0
       server__port: 2368
 
-      # Mail — generic SMTP. Leave MAIL_* unset to disable email entirely.
-      mail__transport: ${MAIL_TRANSPORT:-SMTP}
+      # Mail — generic SMTP. Leave MAIL_HOST unset to disable email entirely;
+      # the ${MAIL_HOST:+SMTP} pattern expands to "SMTP" only when MAIL_HOST
+      # is set, otherwise empty (Ghost then falls back to its default).
+      mail__transport: ${MAIL_HOST:+SMTP}
       mail__from: ${MAIL_FROM:-}
       mail__options__host: ${MAIL_HOST:-}
       mail__options__port: ${MAIL_PORT:-587}
@@ -31,7 +33,8 @@ services:
       db:
         condition: service_healthy
     networks:
-      - ghost_network
+      - frontend
+      - backend
     healthcheck:
       test:
         - CMD-SHELL
@@ -70,7 +73,7 @@ services:
     volumes:
       - ghost_db:/var/lib/mysql
     networks:
-      - ghost_network
+      - backend
     command:
       - '--default-authentication-plugin=mysql_native_password'
       - '--performance-schema=OFF'
@@ -110,7 +113,7 @@ services:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
       TUNNEL_METRICS: 0.0.0.0:2000
     networks:
-      - ghost_network
+      - frontend
     depends_on:
       ghost:
         condition: service_healthy
@@ -136,5 +139,9 @@ volumes:
     driver: local
 
 networks:
-  ghost_network:
+  # frontend = ghost ↔ cloudflared (public ingress path).
+  # backend  = ghost ↔ db          (data plane; cloudflared cannot reach MySQL).
+  frontend:
+    driver: bridge
+  backend:
     driver: bridge

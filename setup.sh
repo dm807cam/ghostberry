@@ -46,6 +46,16 @@ prompt_secret() {
 
 genpass() { openssl rand -base64 48 | tr -d '=+/\n' | cut -c1-40; }
 
+# --- Load existing .env FIRST so re-runs preserve prior values -----------
+# Prompts below honor existing env vars via ${!var:-}, so loading .env up
+# front means a stored value short-circuits the prompt. Critically, we must
+# NOT source .env after prompting — that would clobber freshly entered
+# values with the stale on-disk ones.
+if [[ -f .env ]]; then
+  # shellcheck disable=SC1091
+  set -a; source ./.env; set +a
+fi
+
 # --- Domain ---------------------------------------------------------------
 prompt GHOST_URL "Public Ghost URL (e.g. https://blog.example.com)"
 if [[ ! "${GHOST_URL}" =~ ^https?:// ]]; then
@@ -56,14 +66,8 @@ GHOST_URL="${GHOST_URL%/}"
 
 # --- Cloudflare token -----------------------------------------------------
 prompt_secret CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token"
-if [[ ${#CLOUDFLARE_TUNNEL_TOKEN} -lt 40 ]]; then
-  echo "⚠️  Cloudflare token looks short (${#CLOUDFLARE_TUNNEL_TOKEN} chars). Double-check it." >&2
-fi
-
-# --- Load existing .env (so re-runs preserve prior values) ---------------
-if [[ -f .env ]]; then
-  # shellcheck disable=SC1091
-  set -a; source ./.env; set +a
+if [[ ! "${CLOUDFLARE_TUNNEL_TOKEN}" =~ ^eyJ[A-Za-z0-9_-]+ ]] || [[ ${#CLOUDFLARE_TUNNEL_TOKEN} -lt 40 ]]; then
+  echo "⚠️  Cloudflare token doesn't look like a tunnel JWT (expected to start with 'eyJ' and be ≥40 chars). Double-check it." >&2
 fi
 
 # --- Optional mail --------------------------------------------------------
@@ -106,6 +110,26 @@ if [[ -z "${MAIL_HOST}" && "${NONINTERACTIVE:-0}" != "1" ]]; then
 fi
 
 # --- Generate any still-missing secrets ----------------------------------
+# Guard: if the ghost_db volume already exists but we have no stored
+# password, regenerating would lock us out of the live database. MySQL
+# only honors MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD on first init of the
+# data volume, so a new password here would not be applied to the running
+# server. Abort with a clear message instead of silently breaking things.
+ghost_db_volume_exists() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qE '(^|_)ghost_db$'
+}
+
+if [[ -z "${GHOST_DB_PASSWORD:-}" || -z "${MYSQL_ROOT_PASSWORD:-}" ]]; then
+  if ghost_db_volume_exists; then
+    echo "❌ A ghost_db Docker volume already exists but DB passwords are missing from .env." >&2
+    echo "   Refusing to generate new passwords — they would NOT be applied to the existing" >&2
+    echo "   database, and you would be locked out. Recover the original .env from backup," >&2
+    echo "   or destroy the volume to start fresh:" >&2
+    echo "     docker volume ls | awk '/ghost_db/ {print \$2}' | xargs -r docker volume rm" >&2
+    exit 1
+  fi
+fi
 GHOST_DB_PASSWORD="${GHOST_DB_PASSWORD:-$(genpass)}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(genpass)}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(genpass)}"
@@ -125,6 +149,7 @@ shq() {
 # --- Write .env atomically ------------------------------------------------
 umask 077
 TMP="$(mktemp .env.tmp.XXXXXX)"
+trap 'rm -f "${TMP}"' EXIT
 {
   printf '# Ghostberry environment — generated %s\n'   "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '# DO NOT commit this file.\n\n'
