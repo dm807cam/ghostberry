@@ -114,7 +114,7 @@ Lost the Pi entirely:
 
 1. Flash 64-bit Raspberry Pi OS to a new SD card.
 2. Copy your most recent backup archive **and** your old `.env` file to the new box.
-3. Run the one-shot installer with `NONINTERACTIVE=1` and the same `GHOST_URL`/`CLOUDFLARE_TUNNEL_TOKEN`, plus paste in the **same** `BACKUP_ENCRYPTION_KEY` from the old `.env` (otherwise the encrypted archive can't be opened).
+3. Run the one-shot installer with the **same** `BACKUP_ENCRYPTION_KEY` as before (otherwise the encrypted archive can't be opened), e.g. `curl … | sudo GHOST_URL=… CLOUDFLARE_TUNNEL_TOKEN=… BACKUP_ENCRYPTION_KEY='<old key>' NONINTERACTIVE=1 bash`. If you already installed without it, set `BACKUP_ENCRYPTION_KEY` in `.env` to the old value instead.
 4. Drop the backup archive into `/opt/ghostberry/backups/`.
 5. `./scripts/restore.sh backups/<archive>`.
 

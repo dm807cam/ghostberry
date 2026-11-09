@@ -44,11 +44,11 @@ docker compose logs --tail=30 cloudflared
 ```
 
 - `Unauthorized` / `invalid token`: re-copy the token from Zero Trust →
-  Networks → Tunnels, then `CLOUDFLARE_TUNNEL_TOKEN=eyJ… ./setup.sh && docker compose up -d`.
-- Tunnel is healthy but the site shows **502**: the public hostname's service
-  must be exactly `http://ghost:2368`.
+  Networking → Tunnels (Docker command, after `--token`), then `CLOUDFLARE_TUNNEL_TOKEN=eyJ… ./setup.sh && docker compose up -d`.
+- Tunnel is healthy but the site shows **502**: the published application
+  route's service URL must be exactly `http://ghost:2368`.
 - **Redirect loop / "too many redirects"**: `GHOST_URL` must be `https://…`
-  and match the public hostname.
+  and match the route's hostname.
 - cloudflared only starts once Ghost is healthy, so fix Ghost first.
 
 ## Database
