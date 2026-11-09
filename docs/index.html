@@ -272,7 +272,7 @@
       <button id="copy" type="button" aria-label="Copy install command">Copy</button>
     </div>
     <p class="micro">
-      Works on Raspberry Pi OS Bookworm (64-bit) and Debian / Ubuntu. Add
+      Works on Raspberry Pi OS Trixie or Bookworm (64-bit) and Debian / Ubuntu. Add
       <code>--harden</code> for ufw + unattended-upgrades.
     </p>
 
@@ -315,9 +315,9 @@
         <p>Enables memory cgroups, ensures 2 GB swap, installs Docker — all idempotent.</p>
       </div>
       <div class="card">
-        <span class="icon">📦</span>
-        <h3>One-file config</h3>
-        <p>Everything tunable lives in <code>.env</code> — image pins, memory caps, mail, retention.</p>
+        <span class="icon">📧</span>
+        <h3>Email on day one</h3>
+        <p>A built-in send-only mail server (~6 MB RAM) DKIM-signs Ghost's sign-in links and password resets. Or bring your own SMTP.</p>
       </div>
     </div>
   </div>
@@ -369,13 +369,15 @@
     </details>
 
     <details>
-      <summary>Can I add my SMTP credentials during install?</summary>
-      <p>Yes. The installer prompts you with an optional SMTP section after the
-      Cloudflare token — host, port, username, password, from-address. Skip it and Ghost still
-      runs; mail features just stay off until you add the values to <code>.env</code> later.
-      For unattended installs, pre-set <code>MAIL_HOST</code>, <code>MAIL_USER</code>,
-      <code>MAIL_PASSWORD</code>, <code>MAIL_FROM</code> as environment variables and the
-      prompt is skipped automatically.</p>
+      <summary>Does email work out of the box?</summary>
+      <p>Yes. The installer can run a small built-in mail server
+      (<a href="https://maddy.email">maddy</a>) that DKIM-signs Ghost's transactional email —
+      staff invites, password resets, member sign-in links — and prints the DNS records to add
+      in Cloudflare. Home connections often block port 25; the installer checks for that and
+      offers to relay through a provider like Brevo or SMTP2GO instead. You can also pick
+      your own SMTP provider, or skip email. Newsletters are separate: Ghost only sends those
+      through Mailgun. Details in
+      <a href="https://github.com/dm807cam/ghostberry/blob/main/guides/MAIL.md">MAIL.md</a>.</p>
     </details>
 
     <details>

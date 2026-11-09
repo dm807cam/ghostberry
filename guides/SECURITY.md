@@ -106,7 +106,6 @@ All containers implement security best practices:
 
 **Resource Limits**:
 - Memory limits prevent OOM exhaustion
-- CPU limits ensure fair resource sharing
 - Critical for Raspberry Pi's limited resources
 
 ---
@@ -179,10 +178,24 @@ sudo ufw status verbose
 
 ### Internal Network Isolation
 
-Containers communicate over private `ghost_network`:
-- Database only accessible by Ghost container
-- Cloudflared only communicates with Ghost, not database
-- No external bridge to host network
+Three private Docker networks, each shared only by the containers that need it:
+
+| Network | Members | Purpose |
+|---|---|---|
+| `frontend` | cloudflared, ghost | public ingress path |
+| `backend` | ghost, db | database; cloudflared cannot reach MySQL |
+| `mail` | ghost, mail | built-in mail relay; nothing else can submit mail |
+
+No container publishes a port on the host.
+
+### Built-in Mail Server
+
+The optional `ghost_mail` container (maddy, see [MAIL.md](MAIL.md)) is **send-only**:
+- No published ports, and the Cloudflare Tunnel doesn't carry SMTP, so it is unreachable from the internet and can't become an open relay.
+- Accepts mail only from senders in `MAIL_DOMAIN`. Anything else is rejected with `553`.
+- Read-only root filesystem, `cap_drop: ALL`, `no-new-privileges`, 64 MB memory cap.
+- Its DKIM private key lives in the `mail_data` volume (mode 600) and is included in the encrypted backup. Anyone holding it can sign mail as your domain, so if you suspect it leaked, rotate it: delete the volume's `dkim_keys/`, restart the container, and publish the new record from `./scripts/mail.sh dns`.
+- Relay credentials (`MAIL_RELAY_PASSWORD`) live only in `.env`.
 
 ---
 
@@ -190,14 +203,16 @@ Containers communicate over private `ghost_network`:
 
 ### Image Security
 
-**Version Pinning**: All images pinned to specific versions
-```yaml
-ghost:5.96.0-alpine      # Specific Ghost version
-mysql:8.0.36             # Specific MySQL version
-cloudflared:2024.12.2    # Specific Cloudflare version
+**Version pinning**: image tags are set in `.env`. The defaults track maintained release lines so `./scripts/update.sh` picks up security fixes:
+```bash
+GHOST_IMAGE=ghost:6-alpine                    # latest Ghost 6.x
+MYSQL_IMAGE=mysql:8.0                         # latest 8.0 patch (Ghost's own Docker setup uses 8.0)
+CLOUDFLARED_IMAGE=cloudflare/cloudflared:latest
+MAIL_IMAGE=ghcr.io/foxcpp/maddy:0.9.7         # exact pin; bump deliberately
 ```
+For fully reproducible deploys, pin exact versions (e.g. `ghost:6.75.0-alpine`) and bump them yourself.
 
-**Benefits**:
+**Benefits of exact pins**:
 - Predictable deployments
 - No surprise breaking changes
 - Control over updates
@@ -208,7 +223,7 @@ cloudflared:2024.12.2    # Specific Cloudflare version
 # 1. Backup first
 ./scripts/backup.sh
 
-# 2. Update image versions in docker-compose.yml
+# 2. Update image versions in .env (if you pin exact versions)
 
 # 3. Pull new images
 docker compose pull
@@ -228,10 +243,10 @@ docker compose logs -f
 Scan images for vulnerabilities:
 ```bash
 # Using Docker Scout (if available)
-docker scout cves ghost:5.96.0-alpine
+docker scout cves ghost:6-alpine
 
 # Using Trivy
-docker run --rm aquasec/trivy image ghost:5.96.0-alpine
+docker run --rm aquasec/trivy image ghost:6-alpine
 ```
 
 ### Read-Only Root Filesystem
@@ -266,8 +281,8 @@ tmpfs:
    # Create backup
    ./scripts/backup.sh
 
-   # Check if encrypted (.gpg extension)
-   ls -lh backups/*.gpg
+   # Check if encrypted (.enc extension)
+   ls -lh backups/*.enc
    ```
 
 3. **Store encryption key securely**:
@@ -398,7 +413,7 @@ docker compose ps
 docker compose logs --tail=50
 
 # 6. Check for vulnerabilities
-docker scout cves ghost:5.96.0-alpine
+docker scout cves ghost:6-alpine
 ```
 
 ### Log Monitoring
@@ -449,9 +464,10 @@ If you suspect a security breach:
    NEW_DB_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
    NEW_ROOT_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
 
-   # Update .env file
-   # Update in docker-compose.yml
-   # Restart services
+   # Change the DB password inside MySQL first, then in .env:
+   #   docker compose exec db mysql -uroot -p -e "ALTER USER 'ghost'@'%' IDENTIFIED BY '<new>';"
+   # Rotate Cloudflare tunnel token, SMTP / relay credentials at the provider
+   # Restart services: docker compose up -d
    ```
 
 4. **Restore from Known-Good Backup**:
@@ -482,7 +498,8 @@ Enable Cloudflare Access Policies to:
 - [ ] Set `.env` permissions to 600
 - [ ] Verify `.env` not tracked by git
 - [ ] Configure Cloudflare Tunnel with access policies
-- [ ] Update Ghost URL in `docker-compose.yml`
+- [ ] Set `GHOST_URL` in `.env` (via `./setup.sh`)
+- [ ] Publish DKIM / SPF / DMARC records (`./scripts/mail.sh dns`)
 - [ ] Enable UFW firewall on Raspberry Pi
 - [ ] Configure backup encryption key
 
@@ -523,7 +540,7 @@ Enable Cloudflare Access Policies to:
 ### Annually
 - [ ] Comprehensive security audit
 - [ ] Review all access credentials
-- [ ] Update Ghost to latest LTS version
+- [ ] Move to the current Ghost major version
 - [ ] Review and update security policies
 - [ ] Disaster recovery drill
 - [ ] Review cloud provider security settings
@@ -566,4 +583,4 @@ If you discover a security vulnerability in this configuration:
 
 This security documentation is provided as-is. Use at your own risk.
 
-Last Updated: 2026-01-17
+Last Updated: 2026-11-09

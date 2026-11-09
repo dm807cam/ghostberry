@@ -1,6 +1,6 @@
 services:
   ghost:
-    image: ${GHOST_IMAGE:-ghost:5-alpine}
+    image: ${GHOST_IMAGE:-ghost:6-alpine}
     container_name: ghost
     restart: unless-stopped
     environment:
@@ -17,9 +17,10 @@ services:
       server__host: 0.0.0.0
       server__port: 2368
 
-      # Mail — generic SMTP. Leave MAIL_HOST unset to disable email entirely;
-      # the ${MAIL_HOST:+SMTP} pattern expands to "SMTP" only when MAIL_HOST
-      # is set, otherwise empty (Ghost then falls back to its default).
+      # Mail (transactional: sign-in links, password resets, invites).
+      # MAIL_HOST is either the built-in relay ("mail", see the mail service
+      # below) or an external SMTP provider. Leave it unset to disable email.
+      # ${MAIL_HOST:+SMTP} expands to "SMTP" only when MAIL_HOST is set.
       mail__transport: ${MAIL_HOST:+SMTP}
       mail__from: ${MAIL_FROM:-}
       mail__options__host: ${MAIL_HOST:-}
@@ -32,9 +33,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mail:
+        condition: service_healthy
+        # Only enforced when the built-in mail server is enabled
+        # (COMPOSE_PROFILES=mail in .env).
+        required: false
     networks:
       - frontend
       - backend
+      - mail
     healthcheck:
       test:
         - CMD-SHELL
@@ -74,8 +81,10 @@ services:
       - ghost_db:/var/lib/mysql
     networks:
       - backend
+    # No auth-plugin override: Ghost 6's driver speaks MySQL 8's default
+    # caching_sha2_password, and the old --default-authentication-plugin
+    # flag is deprecated in 8.0 and makes MySQL 8.4 refuse to start.
     command:
-      - '--default-authentication-plugin=mysql_native_password'
       - '--performance-schema=OFF'
       - '--innodb-buffer-pool-size=${MYSQL_BUFFER_POOL:-128M}'
       - '--max-connections=50'
@@ -132,16 +141,70 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  # Built-in send-only mail server (maddy). Enabled by the installer when you
+  # choose "built-in" mail; it is off unless COMPOSE_PROFILES contains "mail".
+  # No ports are published: only Ghost can reach it, over the `mail` network.
+  mail:
+    image: ${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.7}
+    container_name: ghost_mail
+    restart: unless-stopped
+    profiles: [mail]
+    # maddy.conf delivers directly to recipients' MX servers;
+    # maddy-relay.conf hands mail to MAIL_RELAY_HOST instead.
+    entrypoint:
+      - /bin/maddy
+      - -config
+      - /etc/maddy/maddy${MAIL_RELAY_HOST:+-relay}.conf
+    command: [run]
+    environment:
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-}
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME:-${MAIL_DOMAIN:-}}
+      MAIL_DKIM_SELECTOR: ${MAIL_DKIM_SELECTOR:-ghost}
+      MAIL_RELAY_HOST: ${MAIL_RELAY_HOST:-}
+      MAIL_RELAY_PORT: ${MAIL_RELAY_PORT:-587}
+      MAIL_RELAY_USER: ${MAIL_RELAY_USER:-}
+      MAIL_RELAY_PASSWORD: ${MAIL_RELAY_PASSWORD:-}
+    volumes:
+      - ./mail:/etc/maddy:ro
+      # DKIM private key + outbound queue. Back this up (backup.sh does).
+      - mail_data:/data
+    networks:
+      - mail
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'QUIT\\r\\n' | nc -w 3 127.0.0.1 2525 | grep -q '^220'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: ${MAIL_MEM_LIMIT:-64m}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
   ghost_content:
     driver: local
   ghost_db:
     driver: local
+  mail_data:
+    driver: local
 
 networks:
   # frontend = ghost ↔ cloudflared (public ingress path).
   # backend  = ghost ↔ db          (data plane; cloudflared cannot reach MySQL).
+  # mail     = ghost ↔ mail        (built-in relay; needs outbound internet).
   frontend:
     driver: bridge
   backend:
+    driver: bridge
+  mail:
     driver: bridge
