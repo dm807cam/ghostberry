@@ -29,7 +29,6 @@ docker compose logs --tail=100 ghost
 | `connect ECONNREFUSED db:3306` | MySQL still starting (first boot takes 1–2 min on a Pi) or crashed: `docker compose logs db` |
 | `Database state requires migration` / `Running migrations` | Normal after an upgrade; wait. Ghost 5 → 6 can take a few minutes on a Pi |
 | `Killed` / exit code 137 | Out of memory. See [Memory](#out-of-memory) |
-| `dependency failed to start: container ghost_mail is unhealthy` | See [Email](#email) |
 
 Ghost has no published port. To reach it from the Pi itself:
 
@@ -84,6 +83,7 @@ docker compose logs ghost | grep -i mail
 | `connect: connection refused` to port 25, "will retry" | Your ISP blocks outbound port 25. Configure a relay: `MAIL_RELAY_HOST=… MAIL_RELAY_USER=… MAIL_RELAY_PASSWORD=… ./setup.sh && docker compose up -d` |
 | `553 5.7.1 Sender domain not allowed` | Sender isn't `@MAIL_DOMAIN`. Check `MAIL_FROM` and the sender addresses in Ghost Admin → Settings |
 | Mail lands in spam | Publish the records from `./scripts/mail.sh dns`; use a relay |
+| `optional dependency "mail" failed to start` during `docker compose up` | Ghost still starts, but can't send mail. Check `docker compose logs mail` (usually a typo in `MAIL_DOMAIN` or the relay settings in `.env`) |
 | `ECONNREFUSED mail:2525` in Ghost logs | Mail container isn't running. `.env` needs `COMPOSE_PROFILES="mail"`; re-run `./setup.sh` |
 | External SMTP: `Invalid login` / `535` | Wrong credentials; Gmail needs an app password |
 | External SMTP: `wrong version number` / TLS errors | Port and TLS mode don't match: 465 ⇒ `MAIL_SECURE=true`, 587 ⇒ `false`. `setup.sh` sets this from the port |

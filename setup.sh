@@ -94,6 +94,9 @@ if [[ -f .env ]]; then
   # shellcheck disable=SC1091
   set -a; source ./.env; set +a
 fi
+# Mail settings as stored by the previous run (before env overrides).
+PREV_MAIL_MODE="${MAIL_MODE:-}"
+PREV_MAIL_HOST="${MAIL_HOST:-}"
 for v in "${!FROM_ENV[@]}"; do printf -v "${v}" '%s' "${FROM_ENV[$v]}"; done
 
 # --- Domain ---------------------------------------------------------------
@@ -123,8 +126,6 @@ fi
 : "${MAIL_RELAY_HOST:=}" "${MAIL_RELAY_PORT:=}" "${MAIL_RELAY_USER:=}" "${MAIL_RELAY_PASSWORD:=}"
 : "${MAIL_DKIM_SELECTOR:=ghost}"
 
-MAIL_MODE_PRESET=0
-[[ -n "${MAIL_MODE}" ]] && MAIL_MODE_PRESET=1
 if [[ -z "${MAIL_MODE}" ]]; then
   if [[ "${MAIL_HOST}" == "mail" ]]; then
     MAIL_MODE=builtin
@@ -186,7 +187,9 @@ case "${MAIL_MODE}" in
       die "MAIL_FROM (${MAIL_FROM}) must be an @${MAIL_DOMAIN} address for the built-in server."
     fi
 
-    if [[ -z "${MAIL_RELAY_HOST}" ]]; then
+    # Probe port 25 only when first choosing direct delivery; an install that
+    # was already builtin keeps its settings without re-asking.
+    if [[ -z "${MAIL_RELAY_HOST}" && "${PREV_MAIL_MODE}" != "builtin" ]]; then
       echo "   Checking whether this network can send mail directly (outbound port 25)…"
       if port25_open; then
         echo "   ✓ Port 25 is open. Mail will be delivered directly."
@@ -200,8 +203,6 @@ case "${MAIL_MODE}" in
         ask_yn "   Configure a relay now?" y
         [[ "${NONINTERACTIVE:-0}" == "1" ]] && REPLY=n
       fi
-      # Already set up on an earlier run: just report, don't re-ask.
-      (( MAIL_MODE_PRESET )) && REPLY=n
       if [[ "${REPLY}" == "y" ]]; then configure_relay; fi
     fi
     MAIL_RELAY_PORT="${MAIL_RELAY_PORT:-587}"
@@ -218,6 +219,12 @@ case "${MAIL_MODE}" in
     ;;
   smtp)
     [[ "${MAIL_HOST}" == "mail" ]] && MAIL_HOST=""
+    # Coming from builtin/none: the stored port (2525) and TLS flag belonged
+    # to the internal relay, so ask again unless given explicitly.
+    if [[ -z "${PREV_MAIL_HOST}" || "${PREV_MAIL_HOST}" == "mail" ]]; then
+      [[ -z "${FROM_ENV[MAIL_PORT]:-}" ]] && MAIL_PORT=""
+      [[ -z "${FROM_ENV[MAIL_SECURE]:-}" ]] && MAIL_SECURE=""
+    fi
     prompt        MAIL_HOST     "   SMTP host (e.g. smtp.postmarkapp.com)"
     prompt        MAIL_PORT     "   SMTP port (587 = STARTTLS, 465 = implicit TLS)" "587"
     # Username, password and From are optional (some relays use IP auth;

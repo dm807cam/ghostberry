@@ -162,7 +162,7 @@ More in [guides/TROUBLESHOOTING.md](guides/TROUBLESHOOTING.md).
 
 ## Upgrading from Ghost 5
 
-Ghost 5 no longer gets updates. Re-running the installer (or `./setup.sh`) moves an install on the old `ghost:5-alpine` default to `ghost:6-alpine`, after taking a backup. Ghost migrates the database on first start. Before you upgrade:
+Ghost 5 no longer gets updates. Re-running the installer moves an install on the old `ghost:5-alpine` default to `ghost:6-alpine`; it takes a backup first. (`./setup.sh` on its own makes the same change but does **not** back up, so run `./scripts/backup.sh` before `docker compose up -d`.) Ghost migrates the database on first start. Before you upgrade:
 
 - Check your theme at [gscan.ghost.org](https://gscan.ghost.org): Ghost 6 removed AMP.
 - Custom integrations must stop using `?limit=all` and paginate instead.

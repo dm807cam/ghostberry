@@ -56,7 +56,9 @@ Ghost ──SMTP:2525──▶ ghost_mail (maddy) ──DKIM sign──▶ queue
 Two delivery paths, chosen by whether `MAIL_RELAY_HOST` is set:
 
 1. **Direct** (`mail/maddy.conf`): looks up each recipient's MX and delivers
-   on port 25, using TLS where offered (MTA-STS and DANE are honoured).
+   on port 25, using TLS where offered and enforcing it for domains that
+   publish an MTA-STS policy. (DANE is enabled too, but only takes effect
+   if the Pi's DNS resolver validates DNSSEC, which most home setups don't.)
 2. **Relay / smarthost** (`mail/maddy-relay.conf`): signs with *your* DKIM
    key, then hands the message to a provider over STARTTLS with a username and
    password.
@@ -155,7 +157,7 @@ inbound ports, actively maintained, configurable from `.env`.
 
 | Option | Type | Idle RAM | Image | Notes |
 |---|---|---|---|---|
-| **maddy 0.9.7** (chosen) | Go single binary; SMTP, DKIM, queue, MTA-STS/DANE | **~6 MB** (measured) | 31 MB compressed | Generates DKIM keys itself; one small config file; arm64 image on GHCR; active releases |
+| **maddy 0.9.7** (chosen) | Go single binary; SMTP, DKIM, queue, MTA-STS | **~6 MB** (measured) | 31 MB compressed | Generates DKIM keys itself; one small config file; arm64 image on GHCR; active releases |
 | Postfix via `bokysan/docker-postfix` 5.2 | Postfix + rspamd for DKIM | ~296 MB (measured) | 92–135 MB compressed | Battle-tested and very configurable, but rspamd costs about 50× the RAM |
 | Stalwart 1.0 | Rust all-in-one (SMTP/IMAP/JMAP, web admin) | ~100–200 MB | larger | Modern and excellent, but a full mailbox server: far more than Ghost needs |
 | mox | Go all-in-one mail server | ~512 MB recommended | — | Secure-by-default and modern, but wants to own the domain's mail and inbound :25/:443; the author doesn't recommend Docker |
