@@ -31,14 +31,14 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 
 ## Prepare a Cloudflare Tunnel
 
-1. Open [Cloudflare Zero Trust → Networks → Tunnels](https://one.dash.cloudflare.com/).
-2. **Create a tunnel** → name it `ghostberry` → pick **Docker** → **copy the token** (the long `eyJ…` string).
-3. Add a **Public hostname**:
-   - **Subdomain / domain:** `blog.example.com`
-   - **Service:** `http://ghost:2368`
-4. Save.
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/tunnels), go to **Networking → Tunnels → Create a tunnel** and name it `ghostberry`.
+2. Pick **Docker** and **copy the token**: the long `eyJ…` string after `--token` in the command shown. You don't need to run that command; Ghostberry runs cloudflared for you.
+3. On the tunnel's **Routes** tab: **Add route → Published application**.
+   - **Subdomain / Domain:** e.g. `blog` + `example.com`
+   - **Service URL:** `http://ghost:2368`
+4. Select **Add route**.
 
-You'll be asked for that token by the installer.
+You'll be asked for that token by the installer. ([Cloudflare's guide](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/))
 
 ## Install
 

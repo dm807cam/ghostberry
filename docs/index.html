@@ -3,410 +3,542 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ghostberry — Ghost CMS on a Raspberry Pi, in one command</title>
-<meta name="description" content="Production-ready Ghost CMS on Raspberry Pi, fronted by a Cloudflare Tunnel. One-shot installer, hardened containers, encrypted daily backups.">
-<meta property="og:title" content="Ghostberry">
-<meta property="og:description" content="Production-ready Ghost CMS on a Raspberry Pi, installable in one command.">
+<title>Ghostberry — Ghost 6 on a Raspberry Pi, in one command</title>
+<meta name="description" content="Install Ghost 6, MySQL 8 and a Cloudflare Tunnel on a Raspberry Pi with one command. No open ports, locked-down containers, encrypted nightly backups, and email that works from the first boot.">
+<meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<meta property="og:title" content="Ghostberry — Ghost 6 on a Raspberry Pi, in one command">
+<meta property="og:description" content="No open ports, locked-down containers, encrypted nightly backups, and email that works from the first boot.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://dm807cam.github.io/ghostberry/">
+<link rel="canonical" href="https://dm807cam.github.io/ghostberry/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%91%BB%3C/text%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #0e0f12;
-    --bg-2: #16181d;
-    --bg-3: #1d2027;
-    --fg: #e8eaf0;
-    --fg-dim: #9aa0ad;
-    --accent: #ff5c8a;
-    --accent-2: #c4f88d;
-    --border: #262a33;
-    --code: #0a0b0e;
-    --radius: 12px;
+    --bg: #0b0c10;
+    --surface: #14161c;
+    --surface-2: #1b1e26;
+    --border: #272b36;
+    --fg: #eceef3;
+    --fg-dim: #a3a9b7;
+    --accent: #ff6b95;
+    --accent-ink: #1a0610;
+    --accent-soft: rgba(255, 107, 149, 0.12);
+    --leaf: #b4ec7c;
+    --code: #08090c;
+    --glow: rgba(255, 107, 149, 0.18);
+    --radius: 14px;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", system-ui, sans-serif;
+    --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #fafafa;
-      --bg-2: #ffffff;
-      --bg-3: #f1f2f5;
-      --fg: #14161a;
-      --fg-dim: #555a66;
-      --accent: #d62a5f;
-      --accent-2: #4c8a1a;
-      --border: #e3e5ea;
-      --code: #f5f6f9;
+      --bg: #fbfbfc;
+      --surface: #ffffff;
+      --surface-2: #f1f2f6;
+      --border: #e1e3ea;
+      --fg: #12141a;
+      --fg-dim: #4c5262;
+      --accent: #c0185a;
+      --accent-ink: #ffffff;
+      --accent-soft: rgba(192, 24, 90, 0.08);
+      --leaf: #2f6d0c;
+      --code: #f4f5f8;
+      --glow: rgba(192, 24, 90, 0.10);
     }
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
   body {
+    margin: 0;
     background: var(--bg);
     color: var(--fg);
     font-family: var(--sans);
-    line-height: 1.55;
+    font-size: 16px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+  .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 600px) { .container { padding: 0 16px; } }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 16px; top: 12px; z-index: 100; background: var(--surface); padding: 8px 12px; }
+
+  /* Header */
   header.site {
-    padding: 24px 0;
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
     border-bottom: 1px solid var(--border);
   }
-  header.site .container {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  }
-  .brand { font-weight: 700; letter-spacing: -0.01em; font-size: 18px; color: var(--fg); }
+  header.site .container { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+  .brand { font-weight: 750; letter-spacing: -0.02em; font-size: 18px; color: var(--fg); text-decoration: none; display: flex; align-items: center; gap: 8px; }
   .brand .dot { color: var(--accent); }
-  nav.site a { color: var(--fg-dim); margin-left: 20px; font-size: 14px; }
-  nav.site a:hover { color: var(--fg); text-decoration: none; }
+  nav.site { display: flex; gap: 4px; }
+  nav.site a { color: var(--fg-dim); font-size: 14px; text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+  nav.site a:hover { color: var(--fg); background: var(--surface-2); }
+  @media (max-width: 720px) { nav.site a.opt { display: none; } }
 
-  /* HERO */
-  section.hero { padding: 88px 0 56px; }
-  .eyebrow {
-    display: inline-block;
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--accent);
-    padding: 4px 10px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    margin-bottom: 20px;
+  /* Sections */
+  section { padding: 88px 0; border-top: 1px solid var(--border); }
+  section.hero { border-top: 0; padding: 80px 0 72px; position: relative; overflow: hidden; }
+  section.hero::before {
+    content: ""; position: absolute; inset: -40% -20% auto -20%; height: 620px;
+    background: radial-gradient(closest-side, var(--glow), transparent 70%);
+    pointer-events: none;
   }
-  h1 {
-    font-size: clamp(36px, 6vw, 60px);
-    line-height: 1.05;
-    margin: 0 0 16px;
-    letter-spacing: -0.02em;
-    font-weight: 800;
-  }
+  section.hero > .container { position: relative; }
+  .kicker { font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+  h1 { font-size: clamp(38px, 6.4vw, 66px); line-height: 1.03; letter-spacing: -0.035em; font-weight: 800; margin: 0 0 20px; text-wrap: balance; }
   h1 .accent { color: var(--accent); }
-  .lede {
-    font-size: clamp(17px, 2vw, 20px);
-    color: var(--fg-dim);
-    max-width: 640px;
-    margin: 0 0 32px;
-  }
+  h2 { font-size: clamp(26px, 3.6vw, 36px); line-height: 1.15; letter-spacing: -0.025em; margin: 0 0 12px; }
+  h3 { font-size: 17px; line-height: 1.35; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { font-size: clamp(17px, 2.1vw, 20px); color: var(--fg-dim); max-width: 62ch; margin: 0 0 36px; }
+  .sub { color: var(--fg-dim); margin: 0 0 40px; max-width: 64ch; }
 
-  /* INSTALL BLOCK */
-  .install {
-    background: var(--code);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    display: flex; align-items: stretch;
-    overflow: hidden;
-    max-width: 100%;
-  }
-  .install pre {
-    margin: 0;
-    padding: 18px 20px;
-    font-family: var(--mono);
-    font-size: 14px;
-    color: var(--fg);
-    overflow-x: auto;
-    flex: 1;
-    white-space: pre;
-  }
-  .install pre .prompt { color: var(--fg-dim); user-select: none; }
-  .install pre .cmd { color: var(--accent-2); }
-  .install button {
-    background: transparent;
-    color: var(--fg-dim);
-    border: 0;
-    border-left: 1px solid var(--border);
-    padding: 0 18px;
-    font-size: 13px;
-    font-family: var(--sans);
-    cursor: pointer;
-    transition: color .15s ease, background .15s ease;
-    min-width: 84px;
-  }
-  .install button:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
-  .install button.copied { color: var(--accent-2); }
+  /* Terminal / install */
+  .term { background: var(--code); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: 0 20px 60px -30px rgba(0,0,0,.55); max-width: 820px; }
+  .term-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+  .tabs button { font: 500 13px var(--sans); color: var(--fg-dim); background: transparent; border: 0; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] { color: var(--fg); background: var(--surface-2); }
+  .copy { font: 500 13px var(--sans); color: var(--fg-dim); background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; min-width: 76px; }
+  .copy:hover { color: var(--fg); border-color: var(--fg-dim); }
+  .copy.done { color: var(--leaf); border-color: var(--leaf); }
+  .term pre { margin: 0; padding: 18px 20px; font: 14px/1.65 var(--mono); color: var(--fg); overflow-x: auto; white-space: pre; }
+  .term pre .p { color: var(--fg-dim); user-select: none; }
+  .term pre .c { color: var(--leaf); }
+  .term pre .m { color: var(--fg-dim); }
+  .term .note { margin: 0; padding: 0 20px 16px; font-size: 13.5px; color: var(--fg-dim); }
+  .meta { margin: 14px 0 0; font-size: 14px; color: var(--fg-dim); }
+  .cta-row { margin-top: 32px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 10px; border: 1px solid var(--border); color: var(--fg); background: var(--surface); font-size: 15px; font-weight: 600; text-decoration: none; }
+  .btn:hover { border-color: var(--fg-dim); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; margin: 40px 0 0; padding: 0; list-style: none; }
+  .stack li { font-size: 13px; color: var(--fg-dim); border: 1px solid var(--border); background: var(--surface); padding: 4px 10px; border-radius: 999px; }
+  .stack b { color: var(--fg); font-weight: 600; }
 
-  .micro {
-    margin-top: 12px;
-    font-size: 13px;
-    color: var(--fg-dim);
+  /* Architecture */
+  .flow { display: grid; grid-template-columns: minmax(130px, 0.8fr) auto minmax(150px, 1fr) auto minmax(300px, 2.4fr); align-items: center; gap: 12px; }
+  .node { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .node .t { font-weight: 650; font-size: 15px; }
+  .node .d { color: var(--fg-dim); font-size: 13.5px; margin-top: 2px; }
+  .link { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--fg-dim); font-size: 12px; text-align: center; min-width: 76px; }
+  .link { white-space: nowrap; }
+  .link .line { width: 100%; min-width: 56px; height: 2px; background: linear-gradient(90deg, var(--border), var(--accent)); position: relative; }
+  .link .line::after { content: ""; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--accent); border-right: 0; }
+  .link.back .line { background: linear-gradient(270deg, var(--border), var(--accent)); }
+  .link.back .line::after { right: auto; left: -2px; border-left: 0; border-right: 7px solid var(--accent); }
+  .pi { border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border)); border-radius: 18px; padding: 16px; background: var(--accent-soft); }
+  .pi-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pi-head .t { font-weight: 700; }
+  .pi-head .d { font-size: 12.5px; color: var(--fg-dim); }
+  .chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .chip .t { font: 600 13.5px var(--mono); }
+  .chip .d { font-size: 12.5px; color: var(--fg-dim); }
+  .chip .net { display: inline-block; font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .out { margin-top: 10px; font-size: 12.5px; color: var(--fg-dim); }
+  .legend { margin: 24px 0 0; color: var(--fg-dim); font-size: 15px; max-width: 72ch; }
+  @media (max-width: 880px) {
+    .flow { grid-template-columns: 1fr; }
+    .link { flex-direction: row; justify-content: center; min-height: 34px; }
+    .link .line { width: 2px; min-width: 2px; height: 28px; background: linear-gradient(180deg, var(--border), var(--accent)); }
+    .link .line::after { right: -4px; top: auto; bottom: -2px; border: 5px solid transparent; border-top: 7px solid var(--accent); border-bottom: 0; }
+    .link.back .line { background: linear-gradient(0deg, var(--border), var(--accent)); }
+    .link.back .line::after { left: -4px; right: auto; top: -2px; bottom: auto; border: 5px solid transparent; border-bottom: 7px solid var(--accent); border-top: 0; }
   }
-  .micro code { font-family: var(--mono); font-size: 12px; background: var(--bg-3); padding: 1px 6px; border-radius: 4px; }
+  @media (max-width: 420px) { .chips { grid-template-columns: 1fr; } }
 
-  /* CTA ROW */
-  .cta-row {
-    margin-top: 32px;
-    display: flex; gap: 12px; flex-wrap: wrap;
-  }
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    color: var(--fg);
-    font-size: 14px;
-    font-weight: 500;
-    background: var(--bg-2);
-  }
-  .btn:hover { text-decoration: none; border-color: var(--fg-dim); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.primary:hover { filter: brightness(1.08); }
+  /* Cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  .card p { margin: 0; color: var(--fg-dim); font-size: 15px; }
+  .ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 14px; }
+  .ico svg { width: 20px; height: 20px; }
 
-  /* FEATURES */
-  section.features { padding: 72px 0; border-top: 1px solid var(--border); }
-  h2 {
-    font-size: clamp(24px, 3.4vw, 32px);
-    margin: 0 0 8px;
-    letter-spacing: -0.01em;
-  }
-  h2 + p.sub { color: var(--fg-dim); margin: 0 0 40px; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
-  }
-  .card {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px;
-  }
-  .card .icon { font-size: 20px; margin-bottom: 10px; display: block; }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
-  .card p { margin: 0; color: var(--fg-dim); font-size: 14px; }
+  /* Mail */
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .modes { grid-template-columns: 1fr; } }
+  .mode .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
+  .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; margin-top: 24px; align-items: start; }
+  @media (max-width: 880px) { .split { grid-template-columns: 1fr; } }
+  .term pre.small { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bar-label { font: 13px var(--mono); color: var(--fg-dim); padding: 6px 0; }
+  .notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .notes li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; color: var(--fg-dim); font-size: 15px; }
+  .notes li b { color: var(--fg); }
 
-  /* STEPS */
-  section.steps { padding: 72px 0; border-top: 1px solid var(--border); }
-  ol.steps {
-    list-style: none; padding: 0; margin: 0;
-    display: grid; gap: 20px;
-    counter-reset: step;
+  /* Steps */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: s; }
+  @media (max-width: 820px) { ol.steps { grid-template-columns: 1fr; } }
+  ol.steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  ol.steps li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; margin-bottom: 14px; }
+  ol.steps p { margin: 0; color: var(--fg-dim); font-size: 15px; }
+
+  /* Ops table */
+  .ops { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .ops td { padding: 13px 18px; border-top: 1px solid var(--border); vertical-align: top; font-size: 15px; }
+  .ops tr:first-child td { border-top: 0; }
+  .ops td:first-child { width: 48%; }
+  .ops td:last-child { color: var(--fg-dim); }
+  @media (max-width: 640px) {
+    .ops, .ops tbody, .ops tr, .ops td { display: block; width: 100% !important; }
+    .ops td:first-child { padding-bottom: 2px; }
+    .ops td:last-child { border-top: 0; padding-top: 2px; }
   }
-  ol.steps li {
-    counter-increment: step;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px 24px 22px 64px;
-    position: relative;
-  }
-  ol.steps li::before {
-    content: counter(step);
-    position: absolute; left: 20px; top: 20px;
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--accent); color: #fff;
-    display: grid; place-items: center;
-    font-size: 13px; font-weight: 700;
-  }
-  ol.steps li h3 { margin: 0 0 4px; font-size: 16px; }
-  ol.steps li p { margin: 0; color: var(--fg-dim); font-size: 14px; }
-  ol.steps code {
-    font-family: var(--mono); font-size: 12.5px;
-    background: var(--code); padding: 2px 6px; border-radius: 4px;
-    border: 1px solid var(--border);
-  }
+  .req { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 40px; }
+  .req div { border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; }
+  .req .t { font-size: 13px; color: var(--fg-dim); }
+  .req .v { font-weight: 600; }
 
   /* FAQ */
-  section.faq { padding: 72px 0; border-top: 1px solid var(--border); }
-  details {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    margin-bottom: 10px;
-  }
-  details summary {
-    cursor: pointer;
-    font-weight: 600;
-    list-style: none;
-    display: flex; justify-content: space-between; align-items: center;
-  }
+  .faq-list { display: grid; gap: 10px; max-width: 820px; }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 20px; }
+  details summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 0; }
   details summary::-webkit-details-marker { display: none; }
-  details summary::after { content: "+"; color: var(--fg-dim); font-weight: 400; font-size: 20px; }
+  details summary::after { content: "+"; color: var(--fg-dim); font-weight: 400; font-size: 22px; line-height: 1; }
   details[open] summary::after { content: "−"; }
-  details > p { color: var(--fg-dim); margin: 10px 0 0; font-size: 14.5px; }
-  details code { font-family: var(--mono); font-size: 12.5px; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  details > p, details > ul { color: var(--fg-dim); margin: 0 0 16px; font-size: 15px; }
+  details > ul { padding-left: 20px; }
 
-  /* FOOTER */
-  footer.site {
-    padding: 40px 0 56px;
-    border-top: 1px solid var(--border);
-    color: var(--fg-dim);
-    font-size: 13px;
-  }
-  footer.site .container {
-    display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; align-items: center;
-  }
+  footer.site { padding: 40px 0 56px; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 14px; }
+  footer.site .container { display: flex; gap: 12px 24px; flex-wrap: wrap; justify-content: space-between; }
   footer.site a { color: var(--fg-dim); }
   footer.site a:hover { color: var(--fg); }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <header class="site">
   <div class="container">
-    <div class="brand">👻 Ghostberry<span class="dot">.</span></div>
-    <nav class="site">
-      <a href="#features">Features</a>
-      <a href="#how">How it works</a>
+    <a class="brand" href="#top" aria-label="Ghostberry home"><span aria-hidden="true">👻</span><span>Ghostberry<span class="dot">.</span></span></a>
+    <nav class="site" aria-label="Main">
+      <a class="opt" href="#how">How it works</a>
+      <a class="opt" href="#email">Email</a>
+      <a href="#install">Install</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/dm807cam/ghostberry">GitHub</a>
     </nav>
   </div>
 </header>
 
-<main>
+<main id="main">
 
-<section class="hero">
+<section class="hero" id="top">
   <div class="container">
-    <span class="eyebrow">Ghost CMS · Raspberry Pi · Cloudflare Tunnel</span>
-    <h1>Self-hosted blog,<br><span class="accent">one command</span> away.</h1>
+    <p class="kicker">Ghost 6 · Raspberry Pi · Cloudflare Tunnel</p>
+    <h1>Your own Ghost blog on a Pi.<br> <span class="accent">One command.</span></h1>
     <p class="lede">
-      Ghostberry installs a production-ready Ghost CMS on your Raspberry Pi, fronted by a
-      Cloudflare Tunnel — no exposed ports, hardened containers, encrypted nightly backups.
+      Ghostberry sets up Ghost 6, MySQL 8 and a Cloudflare Tunnel on a Raspberry Pi with Docker.
+      The Pi opens no inbound ports, every container is locked down, backups are encrypted every
+      night, and email works from the first boot.
     </p>
 
-    <div class="install" aria-label="Install command">
-      <pre id="cmd"><span class="prompt">$ </span><span class="cmd">curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash</span></pre>
-      <button id="copy" type="button" aria-label="Copy install command">Copy</button>
+    <div class="term" id="installer">
+      <div class="term-bar">
+        <div class="tabs" role="tablist" aria-label="Install options">
+          <button role="tab" id="tab-std" aria-selected="true" aria-controls="panel-std">Install</button>
+          <button role="tab" id="tab-auto" aria-selected="false" aria-controls="panel-auto" tabindex="-1">Unattended</button>
+          <button role="tab" id="tab-hard" aria-selected="false" aria-controls="panel-hard" tabindex="-1">With firewall</button>
+        </div>
+        <button class="copy" type="button" id="copy" aria-live="polite">Copy</button>
+      </div>
+      <div role="tabpanel" id="panel-std" aria-labelledby="tab-std">
+<pre><span class="p">$ </span><span class="c">curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash</span></pre>
+        <p class="note">Asks for your blog's address, your Cloudflare Tunnel token, and how Ghost should send email.</p>
+      </div>
+      <div role="tabpanel" id="panel-auto" aria-labelledby="tab-auto" hidden>
+<pre><span class="p">$ </span><span class="c">curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh \
+  | sudo GHOST_URL=https://blog.example.com \
+         CLOUDFLARE_TUNNEL_TOKEN=YOUR_TUNNEL_TOKEN \
+         NONINTERACTIVE=1 bash</span></pre>
+        <p class="note">No prompts. Uses the built-in mail server; add <code>MAIL_RELAY_HOST</code>, <code>MAIL_RELAY_USER</code> and <code>MAIL_RELAY_PASSWORD</code> to send through a provider, or <code>MAIL_MODE=smtp</code> / <code>none</code>.</p>
+      </div>
+      <div role="tabpanel" id="panel-hard" aria-labelledby="tab-hard" hidden>
+<pre><span class="p">$ </span><span class="c">curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash -s -- --harden</span></pre>
+        <p class="note">Also enables <code>ufw</code> (deny incoming, allow SSH; this <em>replaces</em> any existing ufw rules) and <code>unattended-upgrades</code>.</p>
+      </div>
     </div>
-    <p class="micro">
-      Works on Raspberry Pi OS Trixie or Bookworm (64-bit) and Debian / Ubuntu. Add
-      <code>--harden</code> for ufw + unattended-upgrades.
-    </p>
+    <p class="meta">Raspberry Pi OS Trixie or Bookworm (64-bit), Debian or Ubuntu · Pi 4 (2 GB+), Pi 5 or any 64-bit PC · Safe to re-run</p>
 
     <div class="cta-row">
-      <a class="btn primary" href="https://github.com/dm807cam/ghostberry">View on GitHub →</a>
-      <a class="btn" href="https://github.com/dm807cam/ghostberry/blob/main/guides/SECURITY.md">Security model</a>
-      <a class="btn" href="https://github.com/dm807cam/ghostberry/blob/main/guides/BACKUP.md">Backup &amp; restore</a>
+      <a class="btn primary" href="https://github.com/dm807cam/ghostberry#readme">Read the docs →</a>
+      <a class="btn" href="https://github.com/dm807cam/ghostberry">View on GitHub</a>
     </div>
+
+    <ul class="stack" aria-label="What gets installed">
+      <li><b>Ghost</b> 6</li>
+      <li><b>MySQL</b> 8</li>
+      <li><b>cloudflared</b></li>
+      <li><b>maddy</b> mail relay</li>
+      <li><b>Docker Compose</b> + systemd</li>
+    </ul>
   </div>
 </section>
 
-<section class="features" id="features">
+<section id="how">
   <div class="container">
-    <h2>What's in the box</h2>
-    <p class="sub">Sensible defaults for a homelab that you'd actually trust in production.</p>
+    <p class="kicker">How it works</p>
+    <h2>Nothing on your network is exposed</h2>
+    <p class="sub">Readers reach Ghost only through Cloudflare. The tunnel connects outward from the Pi,
+    so there's no port forwarding on your router and no public IP to protect.</p>
+
+    <div class="flow" role="img" aria-label="Readers connect over HTTPS to Cloudflare. Cloudflare reaches the Raspberry Pi through an outbound tunnel. On the Pi, cloudflared forwards to Ghost, Ghost uses MySQL, and Ghost sends email through the maddy mail relay, which delivers to recipients' mail servers or a relay provider.">
+      <div class="node">
+        <div class="t">Readers</div>
+        <div class="d">blog.example.com</div>
+      </div>
+      <div class="link"><span class="line"></span>HTTPS</div>
+      <div class="node">
+        <div class="t">Cloudflare edge</div>
+        <div class="d">TLS certificates, DDoS protection, optional Access login for <code>/ghost</code></div>
+      </div>
+      <div class="link back"><span class="line"></span>outbound tunnel</div>
+      <div class="pi">
+        <div class="pi-head"><span class="t">Your Raspberry Pi</span><span class="d">0 published ports</span></div>
+        <div class="chips">
+          <div class="chip"><div class="t">cloudflared</div><div class="d">tunnel connector</div><span class="net">frontend</span></div>
+          <div class="chip"><div class="t">ghost</div><div class="d">Ghost 6, Node 22</div><span class="net">frontend · backend · mail</span></div>
+          <div class="chip"><div class="t">db</div><div class="d">MySQL 8</div><span class="net">backend</span></div>
+          <div class="chip"><div class="t">mail</div><div class="d">maddy, send-only</div><span class="net">mail</span></div>
+        </div>
+        <div class="out">mail → recipients' mail servers (port 25) or your relay provider (port 587)</div>
+      </div>
+    </div>
+    <p class="legend">Each container only joins the private networks it needs: cloudflared can reach Ghost but
+    not the database, and only Ghost can hand mail to the mail server.</p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <p class="kicker">What's in the box</p>
+    <h2>Production defaults, homelab hardware</h2>
+    <p class="sub">The parts you'd otherwise wire up by hand, set up the same way every time.</p>
     <div class="grid">
       <div class="card">
-        <span class="icon">🔒</span>
-        <h3>Zero exposed ports</h3>
-        <p>Traffic only reaches Ghost through your Cloudflare Tunnel. DDoS protection and WAF for free.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>No open ports</h3>
+        <p>The Cloudflare Tunnel dials out from the Pi. Cloudflare handles TLS and DDoS protection, and you can put Cloudflare Access in front of the admin panel.</p>
       </div>
       <div class="card">
-        <span class="icon">🛡️</span>
-        <h3>Hardened containers</h3>
-        <p>All capabilities dropped by default, <code>no-new-privileges</code>, memory caps, log rotation.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>Locked-down containers</h3>
+        <p>Every container drops all Linux capabilities and adds back only what it needs, runs with <code>no-new-privileges</code>, and has a memory cap and log rotation.</p>
       </div>
       <div class="card">
-        <span class="icon">💾</span>
-        <h3>Encrypted backups</h3>
-        <p>Nightly mysqldump + content tar, AES-256 via OpenSSL pbkdf2. <code>restore.sh</code> included.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
+        <h3>Encrypted nightly backups</h3>
+        <p>Database and content (plus the mail signing key, if you use the built-in server), encrypted with AES-256 every night at 03:17. Keeps the last 7. <code>restore.sh</code> puts it all back.</p>
       </div>
       <div class="card">
-        <span class="icon">🚀</span>
-        <h3>Systemd-native</h3>
-        <p>Starts on boot, restarts on failure, integrates with <code>journalctl</code> like anything else.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
+        <h3>Email from the first boot</h3>
+        <p>A built-in send-only mail server signs Ghost's emails with DKIM and retries failed deliveries. Or plug in any SMTP provider.</p>
       </div>
       <div class="card">
-        <span class="icon">🍓</span>
-        <h3>Pi-aware bootstrap</h3>
-        <p>Enables memory cgroups, ensures 2 GB swap, installs Docker — all idempotent.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></div>
+        <h3>Updates with a safety net</h3>
+        <p><code>update.sh</code> backs up first, pulls new images, recreates the stack and waits until Ghost reports healthy. systemd starts it all on boot.</p>
       </div>
       <div class="card">
-        <span class="icon">📧</span>
-        <h3>Email on day one</h3>
-        <p>A built-in send-only mail server (~6 MB RAM) DKIM-signs Ghost's sign-in links and password resets. Or bring your own SMTP.</p>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></div>
+        <h3>Built for the Pi</h3>
+        <p>Turns on memory cgroups, makes sure there's 2 GB of swap, installs Docker, and sizes memory limits for a 2 GB Pi 4.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section class="steps" id="how">
+<section id="email">
   <div class="container">
-    <h2>How it works</h2>
-    <p class="sub">Three things to do — the installer handles the rest.</p>
+    <p class="kicker">Email</p>
+    <h2>Sign-in links and password resets, working on day one</h2>
+    <p class="sub">Ghost can't invite staff, reset passwords or sign members in without email. The installer
+    asks how you want to send it:</p>
+
+    <div class="modes">
+      <div class="card mode">
+        <span class="tag">Default</span>
+        <h3>Built-in mail server</h3>
+        <p><a href="https://maddy.email">maddy</a>, about 6 MB of RAM. Signs every message with DKIM,
+        queues and retries, and delivers directly or through a relay. No account needed.</p>
+      </div>
+      <div class="card mode">
+        <span class="tag">Bring your own</span>
+        <h3>Your SMTP provider</h3>
+        <p>Postmark, Brevo, Amazon SES, Fastmail, a Gmail app password… Ghost connects to it directly.</p>
+      </div>
+      <div class="card mode">
+        <span class="tag">Later</span>
+        <h3>No email for now</h3>
+        <p>Skip it and turn it on later: <code>MAIL_MODE=builtin ./setup.sh</code>, then <code>docker compose up -d</code>.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="term" aria-label="Example output of the mail DNS helper">
+        <div class="term-bar"><span class="bar-label">./scripts/mail.sh dns</span></div>
+<pre class="small"><span class="m">1) DKIM — proves the mail really comes from you</span>
+   Name:  ghost._domainkey.blog.example.com
+   Value: v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0B…
+   <span class="c">✓ published</span>
+
+<span class="m">2) SPF — which servers may send for blog.example.com</span>
+<span class="m">3) DMARC — tells receivers what to do with mail that fails the checks</span></pre>
+        <p class="note">Prints the exact records to add in Cloudflare and checks whether each is live.</p>
+      </div>
+      <ul class="notes">
+        <li><b>Home connections:</b> many ISPs block outbound port 25, and home IPs often land in spam.
+          The installer tests port 25 and offers to relay through a provider instead (Brevo, SMTP2GO and
+          Resend have free tiers). Mail is still signed with your own key.</li>
+        <li><b>Newsletters:</b> Ghost sends bulk newsletters only through Mailgun. The built-in server
+          covers everything else: sign-in links, password resets, staff invites and notifications.</li>
+        <li><b>Check it works:</b> <code>./scripts/mail.sh test you@example.com</code> sends a message
+          using Ghost's own mail settings.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="container">
+    <p class="kicker">Get started</p>
+    <h2>Three steps</h2>
+    <p class="sub">About a coffee's worth of work. The installer does everything else.</p>
     <ol class="steps">
       <li>
         <h3>Flash 64-bit Raspberry Pi OS</h3>
-        <p>Pi 4 (2 GB+) or Pi 5. Enable SSH, log in. That's the only manual prep.</p>
+        <p>On a Pi 4 (2 GB or more) or a Pi 5. Turn on SSH in Raspberry Pi Imager, then log in.</p>
       </li>
       <li>
         <h3>Create a Cloudflare Tunnel</h3>
-        <p>In the Zero Trust dashboard → Networks → Tunnels. Add a public hostname pointing to
-        <code>http://ghost:2368</code>. Copy the tunnel token.</p>
+        <p>In the Cloudflare dashboard: <b>Networking → Tunnels → Create a tunnel</b>, pick
+        <b>Docker</b> and copy the token (the long <code>eyJ…</code> string). Then
+        <b>Routes → Add route → Published application</b> for your domain, with service URL
+        <code>http://ghost:2368</code>.</p>
       </li>
       <li>
         <h3>Run the installer</h3>
-        <p>Paste the one-liner, give it your domain and the token, wait ~3 minutes. Then visit
-        <code>https://your-domain/ghost</code> to create your admin account.</p>
+        <p>Paste the command above and answer the prompts. When it finishes, open
+        <code>https://your-domain/ghost</code> to create your admin account, and add the DNS
+        records it printed.</p>
       </li>
     </ol>
+
+    <div class="req" aria-label="Requirements">
+      <div><div class="t">Hardware</div><div class="v">Pi 4 (2 GB+) or Pi 5, or any 64-bit PC</div></div>
+      <div><div class="t">Operating system</div><div class="v">Raspberry Pi OS (64-bit), Debian, Ubuntu</div></div>
+      <div><div class="t">Domain</div><div class="v">On Cloudflare (free plan is fine)</div></div>
+      <div><div class="t">Email (optional)</div><div class="v">Nothing, or a relay / SMTP account</div></div>
+    </div>
   </div>
 </section>
 
-<section class="faq" id="faq">
+<section id="ops">
   <div class="container">
-    <h2>FAQ</h2>
-    <p class="sub">The questions that come up before you commit to running the script.</p>
+    <p class="kicker">Day two</p>
+    <h2>Everyday commands</h2>
+    <p class="sub">Run from <code>/opt/ghostberry</code>.</p>
+    <table class="ops">
+      <tbody>
+        <tr><td><code>./scripts/backup.sh</code></td><td>Back up now (one also runs every night)</td></tr>
+        <tr><td><code>./scripts/restore.sh backups/&lt;file&gt;</code></td><td>Restore database, content and mail key from a backup</td></tr>
+        <tr><td><code>./scripts/update.sh</code></td><td>Back up, pull new images, restart, wait until healthy</td></tr>
+        <tr><td><code>./scripts/mail.sh test you@example.com</code></td><td>Send a test email the way Ghost does</td></tr>
+        <tr><td><code>./scripts/mail.sh status</code></td><td>Mail server health, queue and recent log</td></tr>
+        <tr><td><code>docker compose logs -f</code></td><td>Follow all logs</td></tr>
+        <tr><td><code>sudo systemctl status ghostberry</code></td><td>Service status</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 
-    <details>
-      <summary>What does the installer actually do?</summary>
-      <p>It checks you're on Debian/Pi OS aarch64, enables memory cgroups in the boot cmdline if
-      missing, ensures ≥ 2 GB of swap, installs Docker via the official convenience script, clones
-      the repo to <code>/opt/ghostberry</code>, writes <code>.env</code> (with auto-generated
-      40-char DB passwords and a backup encryption key), installs a systemd unit, drops a daily
-      backup cron, and starts the stack. Re-run it any time — it's idempotent.</p>
-    </details>
+<section id="faq">
+  <div class="container">
+    <p class="kicker">FAQ</p>
+    <h2>Before you run the script</h2>
+    <p class="sub">The questions people ask first.</p>
+    <div class="faq-list">
+      <details>
+        <summary>What exactly does the installer do?</summary>
+        <ul>
+          <li>Checks the OS and CPU (warns on anything but 64-bit Debian, Raspberry Pi OS or Ubuntu).</li>
+          <li>On a Pi, turns on memory cgroups in the boot command line, and makes sure there's at least 2 GB of swap.</li>
+          <li>Installs Docker (official script), git, curl, openssl and jq.</li>
+          <li>Clones the project to <code>/opt/ghostberry</code>.</li>
+          <li>Writes <code>.env</code> with generated 40-character database passwords and a backup key, and asks how to send email.</li>
+          <li>Installs a systemd unit and a nightly backup job, then starts everything and waits for Ghost to report healthy.</li>
+        </ul>
+        <p>Re-running it updates the code and settings. If Ghostberry is already running, it takes a backup first.</p>
+      </details>
 
-    <details>
-      <summary>Why Cloudflare Tunnel?</summary>
-      <p>Your Pi never opens an inbound port. The tunnel makes an outbound connection to
-      Cloudflare; their edge routes requests back through it. You get DDoS protection, a WAF,
-      and TLS without managing certificates — and you can put Cloudflare Access in front of
-      <code>/ghost</code> if you want SSO on the admin panel.</p>
-    </details>
+      <details>
+        <summary>Why a Cloudflare Tunnel?</summary>
+        <p>Your Pi never accepts inbound connections: <code>cloudflared</code> connects out to Cloudflare,
+        and Cloudflare sends requests back through that connection. You get TLS without managing certificates,
+        DDoS protection, and your home IP stays private. You can also put
+        <a href="https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/">Cloudflare Access</a>
+        in front of <code>/ghost</code> to add a login for the admin panel.</p>
+      </details>
 
-    <details>
-      <summary>Does email work out of the box?</summary>
-      <p>Yes. The installer can run a small built-in mail server
-      (<a href="https://maddy.email">maddy</a>) that DKIM-signs Ghost's transactional email —
-      staff invites, password resets, member sign-in links — and prints the DNS records to add
-      in Cloudflare. Home connections often block port 25; the installer checks for that and
-      offers to relay through a provider like Brevo or SMTP2GO instead. You can also pick
-      your own SMTP provider, or skip email. Newsletters are separate: Ghost only sends those
-      through Mailgun. Details in
-      <a href="https://github.com/dm807cam/ghostberry/blob/main/guides/MAIL.md">MAIL.md</a>.</p>
-    </details>
+      <details>
+        <summary>What doesn't work yet?</summary>
+        <p>Newsletters need a Mailgun account, because Ghost only sends bulk email through Mailgun. Ghost 6's
+        ActivityPub ("Network") and web analytics features need extra services that Ghostberry doesn't run yet.
+        Everything else in Ghost works.</p>
+      </details>
 
-    <details>
-      <summary>How are secrets handled?</summary>
-      <p>Everything sensitive lives in <code>/opt/ghostberry/.env</code>, mode <code>600</code>,
-      owned by your user. Database passwords and the backup encryption key are generated locally
-      with OpenSSL — they never leave the device.</p>
-    </details>
+      <details>
+        <summary>I'm on Ghost 5. How do I upgrade?</summary>
+        <p>Re-run the installer. It backs up, then moves the old <code>ghost:5-alpine</code> default to Ghost 6,
+        and Ghost migrates the database on first start. Check your theme with
+        <a href="https://gscan.ghost.org">GScan</a> first: Ghost 6 removed AMP. To stay on Ghost 5 for now,
+        pin <code>GHOST_IMAGE=ghost:5.130-alpine</code> in <code>.env</code>.</p>
+      </details>
 
-    <details>
-      <summary>What if I lose the Pi?</summary>
-      <p>Restore from a backup archive on a fresh Pi. The encryption key in <code>.env</code> is
-      the only thing you must back up out-of-band — keep it in your password manager. The
-      installer + your encrypted archive get you back to identical state.</p>
-    </details>
+      <details>
+        <summary>How are secrets handled?</summary>
+        <p>Passwords and tokens live in <code>/opt/ghostberry/.env</code>, readable only by your user (mode
+        <code>600</code>). The database passwords and backup key are generated on the Pi with OpenSSL. The mail
+        server's DKIM key stays in a Docker volume and is included in the encrypted backups.</p>
+      </details>
 
-    <details>
-      <summary>Will it run on a Pi Zero / 32-bit OS?</summary>
-      <p>No. Ghost and MySQL 8 require 64-bit ARM and at least ~1.5 GB of RAM in practice. A Pi 4
-      with 2 GB works; 4 GB is comfortable.</p>
-    </details>
+      <details>
+        <summary>What if I lose the Pi?</summary>
+        <p>Backups are written to the Pi itself, so copy them somewhere else (rclone or rsync) and keep the
+        <code>BACKUP_ENCRYPTION_KEY</code> from <code>.env</code> in your password manager. On a new Pi: run the
+        installer, put that key into <code>.env</code>, copy an archive into <code>backups/</code> and run
+        <code>./scripts/restore.sh</code>.</p>
+      </details>
 
-    <details>
-      <summary>Is curl-piped-to-bash safe?</summary>
-      <p>You're trusting this repo either way — the alternative (clone, then run) executes the
-      same code. If you'd rather inspect first, the script is plain bash:
-      <a href="https://github.com/dm807cam/ghostberry/blob/main/install.sh">read install.sh on GitHub</a>
-      before piping it.</p>
-    </details>
+      <details>
+        <summary>Will it run on a Pi Zero, a Pi 3 or a 32-bit OS?</summary>
+        <p>Not on a 32-bit OS: the Ghost and MySQL images are only published for 64-bit (arm64 and x86-64).
+        Memory is the other limit. The default caps add up to about 1.5 GB, so a 2 GB Pi 4 is the
+        smallest supported board; 4 GB gives headroom.</p>
+      </details>
+
+      <details>
+        <summary><span>Is <code>curl | sudo bash</code> safe?</span></summary>
+        <p>You're trusting this repository either way: cloning it and running the script executes the same
+        code. If you'd like to read it first, it's plain bash:
+        <a href="https://github.com/dm807cam/ghostberry/blob/main/install.sh">install.sh on GitHub</a>.</p>
+      </details>
+    </div>
   </div>
 </section>
 
@@ -414,10 +546,11 @@
 
 <footer class="site">
   <div class="container">
-    <div>MIT licensed. Ghost is © Ghost Foundation.</div>
+    <div>MIT licensed. Not affiliated with the Ghost Foundation; Ghost is their trademark.</div>
     <div>
       <a href="https://github.com/dm807cam/ghostberry">Source</a> ·
       <a href="https://github.com/dm807cam/ghostberry/issues">Issues</a> ·
+      <a href="https://github.com/dm807cam/ghostberry/blob/main/guides/SECURITY.md">Security</a> ·
       <a href="https://ghost.org/">Ghost</a>
     </div>
   </div>
@@ -425,24 +558,45 @@
 
 <script>
   (() => {
-    const btn = document.getElementById('copy');
-    const cmd = 'curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash';
-    btn.addEventListener('click', async () => {
+    const tabs = [...document.querySelectorAll('#installer [role="tab"]')];
+    const copyBtn = document.getElementById('copy');
+
+    function select(tab, focus) {
+      tabs.forEach(t => {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) tab.focus();
+      copyBtn.textContent = 'Copy';
+      copyBtn.classList.remove('done');
+    }
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => select(t, false));
+      t.addEventListener('keydown', e => {
+        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+      });
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      const panel = document.querySelector('#installer [role="tabpanel"]:not([hidden])');
+      const code = panel.querySelector('.c');
       try {
-        await navigator.clipboard.writeText(cmd);
-        btn.textContent = 'Copied ✓';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1600);
+        await navigator.clipboard.writeText(code.textContent);
+        copyBtn.textContent = 'Copied ✓';
+        copyBtn.classList.add('done');
+        setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('done'); }, 1600);
       } catch (e) {
-        btn.textContent = 'Press ⌘C';
-        const sel = window.getSelection();
         const range = document.createRange();
-        range.selectNodeContents(document.querySelector('#cmd .cmd'));
+        range.selectNodeContents(code);
+        const sel = window.getSelection();
         sel.removeAllRanges(); sel.addRange(range);
+        copyBtn.textContent = 'Press Ctrl+C';
       }
     });
   })();
 </script>
-
 </body>
 </html>

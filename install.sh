@@ -14,7 +14,8 @@
 #      how Ghost should send email — built-in mail server by default)
 #   7. Installs the ghostberry.service systemd unit
 #   8. Installs a daily cron job for backups
-#   9. (with --harden) installs ufw + unattended-upgrades, locks down SSH
+#   9. (with --harden) installs ufw (deny incoming, allow SSH; replaces
+#      existing ufw rules) + unattended-upgrades
 #  10. Backs up an existing install, then docker compose up -d, polls health
 #
 # Env knobs:
@@ -23,6 +24,7 @@
 #   GHOSTBERRY_REF     git ref     (default main)
 #   GHOST_URL          skip the domain prompt
 #   CLOUDFLARE_TUNNEL_TOKEN  skip the token prompt
+#   BACKUP_ENCRYPTION_KEY    reuse an old key (disaster recovery; fresh installs only)
 #   MAIL_MODE          builtin | smtp | none  (skip the email prompt; see setup.sh)
 #   NONINTERACTIVE=1   refuse any prompting
 #   GHOSTBERRY_USER    user account to own the install (default: invoking user)
@@ -233,7 +235,7 @@ for v in GHOST_URL CLOUDFLARE_TUNNEL_TOKEN \
          MAIL_RELAY_HOST MAIL_RELAY_PORT MAIL_RELAY_USER MAIL_RELAY_PASSWORD \
          GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE \
          GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT \
-         MYSQL_BUFFER_POOL BACKUP_KEEP; do
+         MYSQL_BUFFER_POOL BACKUP_KEEP BACKUP_ENCRYPTION_KEY; do
   if [[ -n "${!v:-}" ]]; then SETUP_ENV+=("${v}=${!v}"); fi
 done
 sudo -u "${GHOSTBERRY_USER}" env "${SETUP_ENV[@]}" ./setup.sh
