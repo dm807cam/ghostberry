@@ -4,6 +4,8 @@
 # Backs up:
 #   - MySQL ghost database (mysqldump piped through docker compose exec)
 #   - Ghost content volume (themes, images, files, settings)
+#   - Built-in mail server's DKIM key (if the mail profile is enabled), so a
+#     restore doesn't force you to republish DNS records
 #
 # Optional encryption: set BACKUP_ENCRYPTION_KEY in .env to AES-256 encrypt
 # the resulting archive with openssl.
@@ -48,12 +50,17 @@ echo "▶ Ghost backup — ${NAME}"
 
 echo "  • dumping database"
 compose exec -T -e MYSQL_PWD="${GHOST_DB_PASSWORD}" db \
-  mysqldump -u ghost --single-transaction --quick --lock-tables=false \
+  mysqldump -u ghost --single-transaction --quick --lock-tables=false --no-tablespaces \
   --default-character-set=utf8mb4 ghost \
   | gzip -9 > "${WORK}/database.sql.gz"
 
 echo "  • archiving content volume"
 compose exec -T ghost tar -C /var/lib/ghost/content -czf - . > "${WORK}/content.tar.gz"
+
+if compose ps --status running --services 2>/dev/null | grep -qx mail; then
+  echo "  • archiving mail DKIM keys"
+  compose exec -T mail tar -C /data -czf - dkim_keys > "${WORK}/mail.tar.gz"
+fi
 
 echo "  • capturing image versions"
 compose config --images > "${WORK}/images.txt" 2>/dev/null || true
@@ -76,8 +83,14 @@ fi
 chmod 600 "${ARCHIVE}"
 
 echo "  • pruning (keeping last ${BACKUP_KEEP})"
-ls -1t "${BACKUP_DIR}"/ghost_backup_*.tar.gz "${BACKUP_DIR}"/ghost_backup_*.tar.gz.enc 2>/dev/null \
+# find (not ls on a glob) so a pattern with no matches isn't an error under
+# pipefail. Newest first by mtime; names contain no whitespace.
+find "${BACKUP_DIR}" -maxdepth 1 -type f \
+     \( -name 'ghost_backup_*.tar.gz' -o -name 'ghost_backup_*.tar.gz.enc' \) \
+     -printf '%T@ %p\n' \
+  | sort -rn \
   | tail -n +"$((BACKUP_KEEP + 1))" \
+  | cut -d' ' -f2- \
   | xargs -r rm -f
 
 SIZE="$(du -h "${ARCHIVE}" | cut -f1)"

@@ -12,7 +12,8 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 
 ## What you get
 
-- 🐳 **Ghost 5.x** (Alpine, ARM64-native) + **MySQL 8** + **cloudflared**, wired together with Docker Compose
+- 🐳 **Ghost 6** (Alpine, ARM64-native) + **MySQL 8** + **cloudflared**, wired together with Docker Compose
+- 📧 **Email that works from the first boot**: a built-in send-only mail server ([maddy](https://maddy.email), ~6 MB RAM) that DKIM-signs and queues Ghost's emails. Or plug in any SMTP provider. See [guides/MAIL.md](guides/MAIL.md)
 - 🔒 **Zero exposed ports** — every request reaches Ghost only through your Cloudflare Tunnel (DDoS protection + WAF for free)
 - 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
 - 💾 **Daily encrypted backups** via cron, with a real `restore.sh`
@@ -24,7 +25,7 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 | | |
 |---|---|
 | Hardware | Raspberry Pi 4 (2 GB+) or 5, **64-bit OS** |
-| OS | Raspberry Pi OS Bookworm (Debian) / Ubuntu Server |
+| OS | Raspberry Pi OS Trixie or Bookworm (Debian) / Ubuntu Server |
 | Network | A domain on Cloudflare (free plan is fine) |
 | Time | ~5 minutes once you have a tunnel token |
 
@@ -45,7 +46,13 @@ You'll be asked for that token by the installer.
 curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 ```
 
-The installer interactively asks for your domain, Cloudflare Tunnel token, and (optionally) SMTP credentials — skip SMTP if you don't have any yet, you can add it later by editing `.env`.
+The installer asks for your domain, your Cloudflare Tunnel token, and how Ghost should send email:
+
+1. **Built-in mail server** (default). No account needed. The installer checks whether your network allows outbound port 25. If not (common on home connections), it offers to relay through a provider such as Brevo or SMTP2GO, still signed with your own DKIM key.
+2. **External SMTP provider**: host, port, username, password.
+3. **No email for now.**
+
+With the built-in server, the installer ends by printing the DNS records (DKIM, SPF, DMARC) to add in Cloudflare. Print them again any time with `./scripts/mail.sh dns`.
 
 For a fully unattended run, pre-set everything:
 
@@ -53,14 +60,20 @@ For a fully unattended run, pre-set everything:
 curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh \
   | sudo GHOST_URL=https://blog.example.com \
          CLOUDFLARE_TUNNEL_TOKEN=eyJh... \
-         MAIL_HOST=smtp.postmarkapp.com \
-         MAIL_USER=<token> MAIL_PASSWORD=<token> \
-         MAIL_FROM=blog@example.com \
          NONINTERACTIVE=1 \
          bash
 ```
 
-(Mail vars are optional — omit them all to install without email features.)
+An unattended install uses the built-in mail server in direct-delivery mode. Add a relay, use your own SMTP provider, or turn mail off:
+
+```bash
+# built-in server, relaying through a provider
+MAIL_RELAY_HOST=smtp-relay.brevo.com MAIL_RELAY_USER=you@example.com MAIL_RELAY_PASSWORD=<key>
+# external SMTP instead of the built-in server
+MAIL_MODE=smtp MAIL_HOST=smtp.postmarkapp.com MAIL_USER=<token> MAIL_PASSWORD=<token> MAIL_FROM=blog@example.com
+# no email
+MAIL_MODE=none
+```
 
 Optional flags:
 
@@ -89,8 +102,16 @@ docker compose logs -f
 # Restore from a backup
 ./scripts/restore.sh backups/ghost_backup_20260514T021700Z.tar.gz
 
-# Update Ghost / MySQL / cloudflared images
+# Update Ghost / MySQL / cloudflared / mail images (takes a backup first)
 ./scripts/update.sh
+
+# Email: DNS records to publish, send a test, check the queue
+./scripts/mail.sh dns
+./scripts/mail.sh test you@example.com
+./scripts/mail.sh status
+
+# Change mail settings (or switch MAIL_MODE), then apply
+MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
 ```
 
 ## File layout
@@ -102,11 +123,17 @@ docker compose logs -f
 ├── ghostberry.service      # systemd unit (installed to /etc/systemd/system/)
 ├── install.sh              # one-shot bootstrapper
 ├── setup.sh                # idempotent .env writer
+├── mail/                   # built-in mail server (maddy) config
+│   ├── common.conf         # listener, DKIM signing, queue
+│   ├── maddy.conf          # direct delivery
+│   └── maddy-relay.conf    # delivery via MAIL_RELAY_HOST
 ├── scripts/
-│   ├── backup.sh           # mysqldump + content tar, optional AES-256
+│   ├── backup.sh           # mysqldump + content tar + DKIM key, AES-256
 │   ├── restore.sh          # inverse of backup
-│   └── update.sh           # backup → pull → up -d → wait healthy
+│   ├── update.sh           # backup → pull → up -d → wait healthy
+│   └── mail.sh             # dns | test <addr> | status
 ├── guides/
+│   ├── MAIL.md
 │   ├── SECURITY.md
 │   ├── BACKUP.md
 │   └── TROUBLESHOOTING.md
@@ -119,6 +146,7 @@ docker compose logs -f
 - **Container hardening:** all services drop `ALL` capabilities and re-add only what's needed; `no-new-privileges` set; memory caps enforced.
 - **Secrets** live only in `.env` (mode `600`) and are never baked into images.
 - **Backups** are AES-256-encrypted via OpenSSL (`pbkdf2`, 200k iters) with an auto-generated 40-char passphrase stored in `.env`. Back that file up somewhere safe.
+- **Mail server is send-only and private.** It joins a dedicated Docker network shared only with Ghost, publishes no ports, only accepts senders from your own domain, and runs read-only with every capability dropped.
 - **Optional `--harden`** flag turns on the host firewall and unattended security upgrades.
 
 Full detail in [guides/SECURITY.md](guides/SECURITY.md).
@@ -128,15 +156,26 @@ Full detail in [guides/SECURITY.md](guides/SECURITY.md).
 - Ghost not coming up? `sudo journalctl -u ghostberry -e` and `docker compose logs ghost`.
 - Tunnel red in the Cloudflare dashboard? `docker compose logs cloudflared` — usually a bad token.
 - Out-of-memory on a 2 GB Pi? Lower `GHOST_MEM_LIMIT`/`MYSQL_BUFFER_POOL` in `.env`, then `docker compose up -d`.
+- Emails not arriving? `./scripts/mail.sh status`. The usual cause is a blocked port 25 (fix: use a relay). See [guides/MAIL.md](guides/MAIL.md#troubleshooting).
 
 More in [guides/TROUBLESHOOTING.md](guides/TROUBLESHOOTING.md).
+
+## Upgrading from Ghost 5
+
+Ghost 5 no longer gets updates. Re-running the installer moves an install on the old `ghost:5-alpine` default to `ghost:6-alpine`; it takes a backup first. (`./setup.sh` on its own makes the same change but does **not** back up, so run `./scripts/backup.sh` before `docker compose up -d`.) Ghost migrates the database on first start. Before you upgrade:
+
+- Check your theme at [gscan.ghost.org](https://gscan.ghost.org): Ghost 6 removed AMP.
+- Custom integrations must stop using `?limit=all` and paginate instead.
+- Ghost 6's **ActivityPub ("Network")** and **web analytics** features need extra services (Ghost's ActivityPub service and Tinybird) that Ghostberry doesn't set up yet. Everything else works. You may see a harmless `Could not get webhook secret for ActivityPub` line in the logs.
+
+To stay on Ghost 5 for now, pin it explicitly, e.g. `GHOST_IMAGE=ghost:5.130-alpine`.
 
 ## Uninstall
 
 ```bash
 sudo systemctl disable --now ghostberry
 sudo rm /etc/systemd/system/ghostberry.service /etc/cron.d/ghostberry-backup
-cd /opt/ghostberry && docker compose down -v
+cd /opt/ghostberry && docker compose --profile mail down -v
 sudo rm -rf /opt/ghostberry
 ```
 

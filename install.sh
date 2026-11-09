@@ -10,11 +10,12 @@
 #   3. Ensures ≥ 2 GB swap
 #   4. Installs Docker (official convenience script) + git + openssl
 #   5. Clones/updates ghostberry into ${INSTALL_DIR:-/opt/ghostberry}
-#   6. Runs setup.sh interactively (prompts for domain + tunnel token)
+#   6. Runs setup.sh interactively (prompts for domain, tunnel token, and
+#      how Ghost should send email — built-in mail server by default)
 #   7. Installs the ghostberry.service systemd unit
 #   8. Installs a daily cron job for backups
 #   9. (with --harden) installs ufw + unattended-upgrades, locks down SSH
-#  10. docker compose up -d, polls Ghost health
+#  10. Backs up an existing install, then docker compose up -d, polls health
 #
 # Env knobs:
 #   INSTALL_DIR        target directory (default /opt/ghostberry)
@@ -22,6 +23,7 @@
 #   GHOSTBERRY_REF     git ref     (default main)
 #   GHOST_URL          skip the domain prompt
 #   CLOUDFLARE_TUNNEL_TOKEN  skip the token prompt
+#   MAIL_MODE          builtin | smtp | none  (skip the email prompt; see setup.sh)
 #   NONINTERACTIVE=1   refuse any prompting
 #   GHOSTBERRY_USER    user account to own the install (default: invoking user)
 #   SKIP_DOCKER=1      assume docker is already installed and working
@@ -39,7 +41,12 @@ for arg in "$@"; do
     --harden) HARDEN=1 ;;
     --no-health) SKIP_HEALTH=1 ;;
     -h|--help)
-      sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+      if [[ -f "$0" ]]; then
+        sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+      else
+        echo "Usage: curl -fsSL <url>/install.sh | sudo [VAR=value ...] bash -s -- [--harden] [--no-health]"
+        echo "See https://github.com/${GHOSTBERRY_REPO:-dm807cam/ghostberry}#install for variables."
+      fi
       exit 0
       ;;
   esac
@@ -205,20 +212,31 @@ fi
 cd "${INSTALL_DIR}"
 chmod +x setup.sh scripts/*.sh 2>/dev/null || true
 
+# Re-run on a live install: take a backup before anything changes (image
+# upgrades such as Ghost 5 → 6 migrate the database in place).
+if [[ -f .env ]] && [[ "$(docker inspect -f '{{.State.Running}}' ghost 2>/dev/null || true)" == "true" ]]; then
+  log "Existing install detected — taking a backup first"
+  sudo -u "${GHOSTBERRY_USER}" ./scripts/backup.sh \
+    || warn "Backup failed; continuing. Check ${INSTALL_DIR}/backups before relying on it."
+fi
+
 # ----------------------------------------------------------------------------
 # 5. Configure (.env)
 # ----------------------------------------------------------------------------
 log "Configuring .env"
-sudo -u "${GHOSTBERRY_USER}" \
-  env GHOST_URL="${GHOST_URL:-}" \
-      CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}" \
-      MAIL_HOST="${MAIL_HOST:-}" \
-      MAIL_PORT="${MAIL_PORT:-587}" \
-      MAIL_USER="${MAIL_USER:-}" \
-      MAIL_PASSWORD="${MAIL_PASSWORD:-}" \
-      MAIL_FROM="${MAIL_FROM:-}" \
-      NONINTERACTIVE="${NONINTERACTIVE:-0}" \
-  ./setup.sh
+# Forward only the settings the caller actually set, so values already in
+# .env aren't overwritten with blanks or defaults on a re-run.
+SETUP_ENV=("NONINTERACTIVE=${NONINTERACTIVE:-0}")
+for v in GHOST_URL CLOUDFLARE_TUNNEL_TOKEN \
+         MAIL_MODE MAIL_HOST MAIL_PORT MAIL_USER MAIL_PASSWORD MAIL_FROM MAIL_SECURE \
+         MAIL_DOMAIN MAIL_HOSTNAME MAIL_DKIM_SELECTOR \
+         MAIL_RELAY_HOST MAIL_RELAY_PORT MAIL_RELAY_USER MAIL_RELAY_PASSWORD \
+         GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE \
+         GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT \
+         MYSQL_BUFFER_POOL BACKUP_KEEP; do
+  if [[ -n "${!v:-}" ]]; then SETUP_ENV+=("${v}=${!v}"); fi
+done
+sudo -u "${GHOSTBERRY_USER}" env "${SETUP_ENV[@]}" ./setup.sh
 
 # ----------------------------------------------------------------------------
 # 6. systemd unit
@@ -262,7 +280,13 @@ fi
 # 9. Start
 # ----------------------------------------------------------------------------
 log "Starting Ghostberry"
-systemctl start ghostberry.service
+if systemctl is-active --quiet ghostberry.service; then
+  # The unit is a oneshot with RemainAfterExit, so `start` would be a no-op
+  # on a re-run. Apply the new config/images to the running stack instead.
+  docker compose up -d --remove-orphans
+else
+  systemctl start ghostberry.service
+fi
 
 if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
   log "Waiting for Ghost to become healthy (up to 5 minutes)"
@@ -286,6 +310,17 @@ fi
 # Strip surrounding quotes from the shq-quoted value before displaying.
 GHOST_URL_DISPLAY="$(grep -E '^GHOST_URL=' "${INSTALL_DIR}/.env" | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
 
+MAIL_MODE_SET="$(grep -E '^MAIL_MODE=' "${INSTALL_DIR}/.env" | cut -d= -f2- | tr -d '"')"
+if [[ "${MAIL_MODE_SET}" == "builtin" ]]; then
+  for _ in $(seq 1 12); do
+    [[ "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ghost_mail 2>/dev/null || true)" == "healthy" ]] && break
+    sleep 5
+  done
+  echo
+  log "Built-in mail server: DNS records to publish"
+  ./scripts/mail.sh dns || warn "Run ./scripts/mail.sh dns once the mail container is up."
+fi
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────────
@@ -296,6 +331,7 @@ cat <<EOF
    Backup:    cd ${INSTALL_DIR} && ./scripts/backup.sh
    Restore:   cd ${INSTALL_DIR} && ./scripts/restore.sh backups/<file>
    Update:    cd ${INSTALL_DIR} && ./scripts/update.sh
+   Mail:      cd ${INSTALL_DIR} && ./scripts/mail.sh test you@example.com
 
 EOF
 

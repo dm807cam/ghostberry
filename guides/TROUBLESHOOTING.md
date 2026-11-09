@@ -1,413 +1,183 @@
-# Ghost CMS Troubleshooting Guide
+# Troubleshooting
 
-## Quick Diagnostics
+All commands run from the install directory (`cd /opt/ghostberry`).
 
-Run this command to check overall system health:
+## Quick diagnostics
+
 ```bash
-docker compose ps && docker compose logs --tail=50
+docker compose ps                      # every service should be "healthy" / "running"
+docker compose logs --tail=50          # all services
+sudo journalctl -u ghostberry -e       # systemd start/stop
 ```
 
-## Common Issues
+`.env` isn't loaded into your shell automatically. Commands below that use
+`$GHOST_DB_PASSWORD` etc. need it first:
 
-### 1. Ghost Container Won't Start
-
-**Symptoms:** Ghost container keeps restarting or exits immediately
-
-**Solutions:**
-
-a) Check if database is ready:
 ```bash
-docker compose logs db | grep "ready for connections"
+set -a; source ./.env; set +a
 ```
 
-b) Verify environment variables:
+## Ghost won't start / keeps restarting
+
 ```bash
-docker compose config
+docker compose logs --tail=100 ghost
 ```
 
-c) Check Ghost logs:
+| Log says | Fix |
+|---|---|
+| `ER_ACCESS_DENIED_ERROR` | `.env` DB password doesn't match the database. See [Database](#database) |
+| `connect ECONNREFUSED db:3306` | MySQL still starting (first boot takes 1–2 min on a Pi) or crashed: `docker compose logs db` |
+| `Database state requires migration` / `Running migrations` | Normal after an upgrade; wait. Ghost 5 → 6 can take a few minutes on a Pi |
+| `Killed` / exit code 137 | Out of memory. See [Memory](#out-of-memory) |
+
+Ghost has no published port. To reach it from the Pi itself:
+
 ```bash
-docker compose logs ghost
+docker compose exec ghost wget -qO- --header='X-Forwarded-Proto: https' \
+  http://localhost:2368/ghost/api/admin/site/
 ```
 
-d) Ensure database password matches:
+## Cloudflare Tunnel not connecting
+
 ```bash
-grep GHOST_DB_PASSWORD .env
-docker compose exec db mysql -u ghost -p${GHOST_DB_PASSWORD} -e "SELECT 1"
+docker compose logs --tail=30 cloudflared
 ```
 
-### 2. Cloudflare Tunnel Not Connecting
+- `Unauthorized` / `invalid token`: re-copy the token from Zero Trust →
+  Networks → Tunnels, then `CLOUDFLARE_TUNNEL_TOKEN=eyJ… ./setup.sh && docker compose up -d`.
+- Tunnel is healthy but the site shows **502**: the public hostname's service
+  must be exactly `http://ghost:2368`.
+- **Redirect loop / "too many redirects"**: `GHOST_URL` must be `https://…`
+  and match the public hostname.
+- cloudflared only starts once Ghost is healthy, so fix Ghost first.
 
-**Symptoms:** Cannot access site via domain, cloudflared container errors
+## Database
 
-**Solutions:**
-
-a) Verify tunnel token:
 ```bash
-grep CLOUDFLARE_TUNNEL_TOKEN .env
+docker compose logs --tail=50 db
+set -a; source ./.env; set +a
+docker compose exec -e MYSQL_PWD="$GHOST_DB_PASSWORD" db mysql -u ghost -e 'SELECT 1' ghost
 ```
 
-b) Check cloudflared logs:
+If the password in `.env` was lost or changed, set it in MySQL to match:
+
 ```bash
-docker compose logs cloudflared | tail -20
+docker compose exec -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" db \
+  mysql -u root -e "ALTER USER 'ghost'@'%' IDENTIFIED BY '$GHOST_DB_PASSWORD';"
+docker compose restart ghost
 ```
 
-c) Test if Ghost is accessible locally:
+MySQL only reads `MYSQL_*` passwords when it first creates the volume.
+Changing them in `.env` later does **not** change the database.
+
+## Email
+
 ```bash
-curl -I http://localhost:2368
+./scripts/mail.sh status                # built-in server: health, queue, log
+./scripts/mail.sh test you@example.com  # send exactly like Ghost does
+docker compose logs ghost | grep -i mail
 ```
 
-d) Restart cloudflared:
-```bash
-docker compose restart cloudflared
-```
+| Problem | Fix |
+|---|---|
+| `connect: connection refused` to port 25, "will retry" | Your ISP blocks outbound port 25. Configure a relay: `MAIL_RELAY_HOST=… MAIL_RELAY_USER=… MAIL_RELAY_PASSWORD=… ./setup.sh && docker compose up -d` |
+| `553 5.7.1 Sender domain not allowed` | Sender isn't `@MAIL_DOMAIN`. Check `MAIL_FROM` and the sender addresses in Ghost Admin → Settings |
+| Mail lands in spam | Publish the records from `./scripts/mail.sh dns`; use a relay |
+| `optional dependency "mail" failed to start` during `docker compose up` | Ghost still starts, but can't send mail. Check `docker compose logs mail` (usually a typo in `MAIL_DOMAIN` or the relay settings in `.env`) |
+| `ECONNREFUSED mail:2525` in Ghost logs | Mail container isn't running. `.env` needs `COMPOSE_PROFILES="mail"`; re-run `./setup.sh` |
+| External SMTP: `Invalid login` / `535` | Wrong credentials; Gmail needs an app password |
+| External SMTP: `wrong version number` / TLS errors | Port and TLS mode don't match: 465 ⇒ `MAIL_SECURE=true`, 587 ⇒ `false`. `setup.sh` sets this from the port |
+| Newsletters don't send | Expected: Ghost sends newsletters only through Mailgun. See [MAIL.md](MAIL.md#what-about-newsletters) |
 
-e) Check Cloudflare dashboard:
-- Go to Zero Trust → Networks → Tunnels
-- Verify tunnel shows as "HEALTHY"
-- Check public hostname configuration points to `http://ghost:2368`
+Full details: [MAIL.md](MAIL.md).
 
-### 3. Database Connection Failed
+## Out of memory
 
-**Symptoms:** "Error: ER_ACCESS_DENIED_ERROR" or "Can't connect to MySQL server"
-
-**Solutions:**
-
-a) Verify database is running:
-```bash
-docker compose ps db
-```
-
-b) Check database health:
-```bash
-docker compose exec db mysqladmin ping -h localhost -u root -p
-```
-
-c) Reset database password:
-```bash
-docker compose down
-docker compose up -d db
-# Wait 30 seconds
-docker compose exec db mysql -u root -p -e "ALTER USER 'ghost'@'%' IDENTIFIED BY 'your_password';"
-docker compose up -d
-```
-
-### 4. Out of Memory Errors
-
-**Symptoms:** Containers crashing, system freezing, OOMKilled in logs
-
-**Solutions:**
-
-a) Check memory usage:
 ```bash
 free -h
 docker stats --no-stream
 ```
 
-b) Reduce MySQL buffer pool (edit docker-compose.yml):
+1. Make sure memory cgroups are on (the installer does this; reboot once
+   after install). `docker info` must not warn about missing memory limit support.
+2. Lower the caps in `.env`, then `docker compose up -d`:
+   ```bash
+   GHOST_MEM_LIMIT=640m
+   DB_MEM_LIMIT=384m
+   MYSQL_BUFFER_POOL=64M
+   ```
+3. Check swap: `swapon --show`. Raspberry Pi OS Trixie uses zram via `rpi-swap`;
+   Bookworm uses `dphys-swapfile` (`CONF_SWAPSIZE` in `/etc/dphys-swapfile`).
+
+## Can't open /ghost admin
+
+- The URL must match `GHOST_URL` exactly (scheme and `www.` included).
+- Check what Ghost thinks its URL is: `docker compose exec ghost printenv url`
+- If you use Cloudflare Access on `/ghost`, make sure you are allowed through.
+
+## Updating
+
+```bash
+./scripts/update.sh      # backup → pull → recreate → wait for healthy
+```
+
+If the update fails, the pre-update backup is the newest file in `backups/`:
+`./scripts/restore.sh backups/<file>`.
+
+## Backups
+
+```bash
+tail -50 /var/log/ghostberry-backup.log   # nightly cron output
+./scripts/backup.sh                        # run by hand
+df -h .                                    # space left?
+```
+
+## Permission errors
+
+```bash
+groups $USER             # must include "docker"
+sudo usermod -aG docker $USER && newgrp docker
+```
+
+Ghost's entrypoint fixes ownership inside the `ghost_content` volume on
+every start, so you shouldn't need to `chown` volume data.
+
+## Debug logging
+
+Add to the `ghost` service's `environment:` in `docker-compose.yml`:
+
 ```yaml
-command:
-  - '--innodb-buffer-pool-size=64M'  # Reduce from 128M
+      logging__level: debug
 ```
 
-c) Enable swap:
-```bash
-sudo dphys-swapfile swapoff
-sudo nano /etc/dphys-swapfile
-# Set CONF_SWAPSIZE=2048
-sudo dphys-swapfile setup
-sudo dphys-swapfile swapon
-```
+Then `docker compose up -d && docker compose logs -f ghost`.
 
-d) Limit container memory:
-Add to ghost service in docker-compose.yml:
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 512M
-```
-
-### 5. Cannot Access Ghost Admin
-
-**Symptoms:** 404 error on /ghost, unable to create admin account
-
-**Solutions:**
-
-a) Verify Ghost URL is correct:
-```bash
-docker compose exec ghost cat /var/lib/ghost/config.production.json | grep url
-```
-
-b) Check if you're using HTTPS in URL but accessing via HTTP:
-- Ghost URL should match your Cloudflare tunnel domain
-- Edit docker-compose.yml and set correct URL
-
-c) Clear browser cache and cookies
-
-d) Try accessing directly: `http://raspberry-pi-ip:2368/ghost`
-
-### 6. Email Not Sending
-
-**Symptoms:** Password resets fail, invitation emails not received
-
-**Solutions:**
-
-a) Verify mail configuration:
-```bash
-grep MAIL .env
-```
-
-b) Test SMTP credentials manually:
-```bash
-docker compose exec ghost npm install -g maildev
-# Use a mail testing service like Mailtrap
-```
-
-c) Check Ghost logs for email errors:
-```bash
-docker compose logs ghost | grep -i mail
-```
-
-d) Common mail providers:
-- **Gmail**: Enable "App Passwords" in Google Account settings
-- **Mailgun**: Verify domain and use SMTP credentials
-- **SendGrid**: Use API key as password
-
-### 7. Performance Issues
-
-**Symptoms:** Slow page loads, high CPU usage
-
-**Solutions:**
-
-a) Monitor resources:
-```bash
-docker stats
-htop  # Install with: sudo apt-get install htop
-```
-
-b) Check disk space:
-```bash
-df -h
-docker system df
-```
-
-c) Clean up Docker:
-```bash
-docker system prune -a --volumes
-```
-
-d) Optimize images:
-```bash
-# Enable Ghost image optimization in admin panel
-# Settings → Labs → Image optimization
-```
-
-e) Use Cloudflare caching:
-- Enable Cloudflare caching rules for static assets
-- Set cache TTL for images, CSS, JS
-
-### 8. Port 2368 Already in Use
-
-**Symptoms:** "port is already allocated" error
-
-**Solutions:**
-
-a) Check what's using the port:
-```bash
-sudo lsof -i :2368
-sudo netstat -tulpn | grep 2368
-```
-
-b) Change port in docker-compose.yml:
-```yaml
-ports:
-  - "3000:2368"  # Use port 3000 instead
-```
-
-c) Stop conflicting service:
-```bash
-sudo systemctl stop <service-name>
-```
-
-### 9. Permission Denied Errors
-
-**Symptoms:** Cannot write to volumes, permission errors in logs
-
-**Solutions:**
-
-a) Fix volume permissions:
-```bash
-docker compose down
-sudo chown -R 1000:1000 ./ghost_content 2>/dev/null || true
-docker compose up -d
-```
-
-b) Check Docker group membership:
-```bash
-groups $USER
-# Should include "docker"
-# If not: sudo usermod -aG docker $USER && newgrp docker
-```
-
-### 10. Backup Fails
-
-**Symptoms:** Backup script errors, empty backup files
-
-**Solutions:**
-
-a) Check backup script permissions:
-```bash
-ls -l scripts/backup.sh
-chmod +x scripts/backup.sh
-```
-
-b) Verify database connectivity:
-```bash
-docker compose exec db mysql -u ghost -p${GHOST_DB_PASSWORD} -e "SHOW DATABASES;"
-```
-
-c) Check disk space:
-```bash
-df -h
-```
-
-d) Run backup manually:
-```bash
-./scripts/backup.sh
-```
-
-## Advanced Debugging
-
-### Enable Debug Logging
-
-Edit docker-compose.yml and add to Ghost environment:
-```yaml
-environment:
-  logging__level: debug
-```
-
-Then restart:
-```bash
-docker compose up -d
-docker compose logs -f ghost
-```
-
-### Access Container Shell
+## Shells and inspection
 
 ```bash
-# Ghost container
 docker compose exec ghost sh
-
-# Database container
 docker compose exec db bash
-
-# Check Ghost config
-docker compose exec ghost cat /var/lib/ghost/config.production.json
+docker compose exec mail sh
+docker compose exec ghost printenv | grep -E '^(url|mail__|database__client)'
+docker network ls | grep -E 'frontend|backend|mail'
 ```
 
-### Network Connectivity Tests
+## Complete reset (deletes ALL data)
 
 ```bash
-# Test from Ghost to database
-docker compose exec ghost ping db
-
-# Test from Ghost to internet
-docker compose exec ghost ping 1.1.1.1
-
-# Test DNS resolution
-docker compose exec ghost nslookup google.com
-```
-
-### Database Inspection
-
-```bash
-# Connect to MySQL
-docker compose exec db mysql -u ghost -p${GHOST_DB_PASSWORD} ghost
-
-# Useful queries:
-SHOW TABLES;
-SELECT * FROM users;
-SELECT * FROM posts LIMIT 5;
-SHOW VARIABLES LIKE 'max_connections';
-```
-
-### Complete Reset (Nuclear Option)
-
-⚠️ **WARNING: This deletes all data!**
-
-```bash
-# Backup first!
-docker compose run --rm db_backup /backup.sh
-
-# Complete cleanup
-docker compose down -v
-sudo rm -rf ghost_content ghost_db
+./scripts/backup.sh                         # just in case
+docker compose --profile mail down -v       # removes containers AND volumes
+rm .env && ./setup.sh                       # new passwords
 docker compose up -d
 ```
 
-## Monitoring Setup
+## Getting help
 
-### Install Monitoring Tools
-
-```bash
-# Install htop for system monitoring
-sudo apt-get install -y htop
-
-# Monitor in real-time
-watch -n 2 'docker stats --no-stream'
-```
-
-### Log Rotation
-
-Add to /etc/docker/daemon.json:
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-```
-
-Then restart Docker:
-```bash
-sudo systemctl restart docker
-docker compose up -d
-```
-
-## Getting Help
-
-1. Check Ghost logs: `docker compose logs ghost`
-2. Check all logs: `docker compose logs`
-3. View this file: `cat TROUBLESHOOTING.md`
-4. Ghost Forum: https://forum.ghost.org/
-5. Cloudflare Community: https://community.cloudflare.com/
-
-## System Information Commands
-
-```bash
-# Raspberry Pi model
-cat /proc/device-tree/model
-
-# OS version
-cat /etc/os-release
-
-# Memory info
-free -h
-
-# Disk space
-df -h
-
-# Docker version
-docker --version
-docker compose version
-
-# Container status
-docker compose ps
-
-# Network info
-docker network ls
-docker network inspect ghost_ghost_network
-```
+- Ghost Forum: https://forum.ghost.org/
+- Cloudflare Community: https://community.cloudflare.com/
+- maddy docs: https://maddy.email/
+- System info to include in a report:
+  ```bash
+  cat /proc/device-tree/model; . /etc/os-release; echo "$PRETTY_NAME"
+  docker --version; docker compose version; docker compose ps
+  ```

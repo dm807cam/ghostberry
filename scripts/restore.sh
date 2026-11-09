@@ -5,8 +5,8 @@
 #   ./scripts/restore.sh backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz
 #   ./scripts/restore.sh backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz.enc
 #
-# Decrypts (if .enc), stops Ghost, restores the MySQL ghost DB and the
-# ghost_content volume, then restarts Ghost.
+# Decrypts (if .enc), stops Ghost, restores the MySQL ghost DB, the
+# ghost_content volume and (if present) the mail DKIM keys, then restarts.
 
 set -euo pipefail
 
@@ -92,7 +92,10 @@ echo "▶ Restoring content volume"
 # Use a transient container with the same ghost_content volume mount, no deps.
 # Stage into a sibling directory first so a torn tar leaves the live content
 # intact; only swap after extraction succeeds.
+# FOWNER: the Ghost image makes the content dir sticky (mode 1777), so even
+# root needs it to delete the node-owned entries in there.
 compose run --rm --no-deps -T \
+  --cap-add FOWNER \
   -v "${WORK}:/restore-src:ro" \
   --entrypoint sh ghost -c '
     set -e
@@ -106,6 +109,18 @@ compose run --rm --no-deps -T \
     find "$STAGE" -mindepth 1 -maxdepth 1 -exec mv {} /var/lib/ghost/content/ \;
     rmdir "$STAGE"
   '
+
+if [[ -f "${WORK}/mail.tar.gz" ]]; then
+  echo "▶ Restoring mail DKIM keys"
+  compose stop mail 2>/dev/null || true
+  compose run --rm --no-deps -T \
+    -v "${WORK}:/restore-src:ro" \
+    --entrypoint sh mail -c '
+      set -e
+      rm -rf /data/dkim_keys
+      tar -xzf /restore-src/mail.tar.gz -C /data
+    '
+fi
 
 echo "▶ Starting Ghost"
 compose up -d ghost

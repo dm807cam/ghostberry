@@ -10,6 +10,7 @@ Each archive contains:
 |---|---|
 | `database.sql.gz` | `mysqldump` of the `ghost` database (single-transaction, utf8mb4) |
 | `content.tar.gz` | The entire `/var/lib/ghost/content` directory — themes, images, files, settings, routes, redirects |
+| `mail.tar.gz` | DKIM private key of the built-in mail server (only when it's enabled), so DNS records stay valid after a restore |
 | `images.txt` | Pinned image versions at the time of backup (for reproducible restores) |
 | `timestamp.txt` | UTC timestamp |
 
@@ -74,7 +75,11 @@ The script will:
 3. Bring the DB up, stop Ghost.
 4. Reload the database via `mysql`.
 5. Wipe and re-populate the `ghost_content` volume from `content.tar.gz`.
-6. Start Ghost and tail its logs.
+6. Restore the mail DKIM key (if the archive has one).
+7. Start Ghost and tail its logs.
+
+`./scripts/update.sh` always runs a backup first and stops if it fails. So
+does re-running the installer on a live install.
 
 ## Off-site copies
 
