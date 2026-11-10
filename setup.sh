@@ -9,6 +9,9 @@
 #     builtin: MAIL_DOMAIN, MAIL_FROM, and optionally MAIL_RELAY_HOST,
 #              MAIL_RELAY_PORT, MAIL_RELAY_USER, MAIL_RELAY_PASSWORD
 #     smtp:    MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, MAIL_FROM
+#   OFFSITE                  r2 | none   — copy every backup to Cloudflare R2
+#     r2:      R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+#              optionally R2_JURISDICTION (default|eu|fedramp), OFFSITE_KEEP
 #   NONINTERACTIVE=1         Fail rather than prompt for missing values
 #
 # Precedence on re-runs: a non-empty environment variable beats the value
@@ -82,6 +85,8 @@ OVERRIDABLE=(
   GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE
   GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT
   MYSQL_BUFFER_POOL BACKUP_KEEP
+  OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
+  R2_JURISDICTION R2_PREFIX OFFSITE_KEEP RCLONE_IMAGE
 )
 declare -A FROM_ENV=()
 for v in "${OVERRIDABLE[@]}"; do
@@ -261,6 +266,53 @@ done
 [[ "${MAIL_MODE}" == "builtin" ]] && PROFILES+=("mail")
 COMPOSE_PROFILES="$(IFS=,; echo "${PROFILES[*]}")"
 
+# --- Off-site backups (Cloudflare R2) ------------------------------------
+# Backups live on the Pi's own SD card by default; a dead card takes them
+# with it. R2 keeps a copy elsewhere: 10 GB free, no download fees, and the
+# Cloudflare account already exists for the tunnel.
+: "${OFFSITE:=}" "${R2_ACCOUNT_ID:=}" "${R2_BUCKET:=}" "${R2_ACCESS_KEY_ID:=}"
+: "${R2_SECRET_ACCESS_KEY:=}" "${R2_JURISDICTION:=}" "${R2_PREFIX:=ghostberry}"
+: "${OFFSITE_KEEP:=7}"
+if [[ -z "${OFFSITE}" ]]; then
+  if [[ -n "${R2_BUCKET}" ]]; then
+    OFFSITE=r2
+  elif [[ "${NONINTERACTIVE:-0}" == "1" ]]; then
+    OFFSITE=none
+  else
+    echo
+    echo "☁️  Off-site backups — copy every nightly backup to Cloudflare R2, so a"
+    echo "   dead SD card doesn't take your blog with it. Free up to 10 GB."
+    echo "   You need (see guides/BACKUP.md): R2 enabled on your Cloudflare account,"
+    echo "   a bucket, and an R2 API token with 'Object Read & Write' on that bucket."
+    ask_yn "   Set up off-site backups now?" n
+    if [[ "${REPLY}" == "y" ]]; then OFFSITE=r2; else OFFSITE=none; fi
+  fi
+fi
+case "${OFFSITE}" in
+  r2)
+    prompt        R2_ACCOUNT_ID        "   Cloudflare account ID (R2 overview page)"
+    prompt        R2_BUCKET            "   R2 bucket name" "ghostberry-backups"
+    prompt        R2_JURISDICTION      "   Bucket jurisdiction (default / eu / fedramp)" "default"
+    prompt        R2_ACCESS_KEY_ID     "   R2 Access Key ID"
+    prompt_secret R2_SECRET_ACCESS_KEY "   R2 Secret Access Key"
+    R2_ACCOUNT_ID="${R2_ACCOUNT_ID,,}"; R2_BUCKET="${R2_BUCKET,,}"; R2_JURISDICTION="${R2_JURISDICTION,,}"
+    [[ "${R2_ACCOUNT_ID}" =~ ^[0-9a-f]{32}$ ]] \
+      || die "R2_ACCOUNT_ID should be the 32-character hex account ID (Cloudflare dashboard → R2 → Overview)."
+    [[ "${R2_BUCKET}" =~ ^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$ ]] \
+      || die "R2_BUCKET '${R2_BUCKET}' isn't a valid bucket name (3–63 lowercase letters, digits, hyphens)."
+    [[ "${R2_JURISDICTION}" =~ ^(default|eu|fedramp)$ ]] \
+      || die "R2_JURISDICTION must be default, eu or fedramp."
+    [[ "${OFFSITE_KEEP}" =~ ^[1-9][0-9]*$ ]] || die "OFFSITE_KEEP must be a positive number."
+    [[ "${R2_ACCESS_KEY_ID}" =~ ^[0-9a-fA-F]{32}$ ]] \
+      || warn "R2_ACCESS_KEY_ID doesn't look like an R2 key (usually 32 hex characters)."
+    [[ "${R2_SECRET_ACCESS_KEY}" =~ ^[0-9a-fA-F]{64}$ ]] \
+      || warn "R2_SECRET_ACCESS_KEY doesn't look like an R2 secret (usually 64 hex characters)."
+    ;;
+  none) ;;
+  *) die "OFFSITE must be r2 or none (got '${OFFSITE}')." ;;
+esac
+: "${R2_JURISDICTION:=default}"
+
 # --- Image pins -----------------------------------------------------------
 # Ghost 5 no longer gets updates. Move installs that still use the old
 # default tag to Ghost 6 (Ghost's own upgrade path; update.sh / install.sh
@@ -341,11 +393,21 @@ trap 'rm -f "${TMP}"' EXIT
   printf '# Backup encryption (auto-generated). Store this somewhere safe.\n'
   printf 'BACKUP_ENCRYPTION_KEY=%s\n'                   "$(shq "${BACKUP_ENCRYPTION_KEY}")"
   printf 'BACKUP_KEEP=%s\n\n'                           "$(shq "${BACKUP_KEEP:-7}")"
+  printf '# Off-site backups: r2 | none. See guides/BACKUP.md.\n'
+  printf 'OFFSITE=%s\n'              "$(shq "${OFFSITE}")"
+  printf 'R2_ACCOUNT_ID=%s\n'        "$(shq "${R2_ACCOUNT_ID}")"
+  printf 'R2_BUCKET=%s\n'            "$(shq "${R2_BUCKET}")"
+  printf 'R2_JURISDICTION=%s\n'      "$(shq "${R2_JURISDICTION}")"
+  printf 'R2_PREFIX=%s\n'            "$(shq "${R2_PREFIX}")"
+  printf 'R2_ACCESS_KEY_ID=%s\n'     "$(shq "${R2_ACCESS_KEY_ID}")"
+  printf 'R2_SECRET_ACCESS_KEY=%s\n' "$(shq "${R2_SECRET_ACCESS_KEY}")"
+  printf 'OFFSITE_KEEP=%s\n\n'        "$(shq "${OFFSITE_KEEP}")"
   printf '# Image pins — leave at defaults unless overriding.\n'
   printf 'GHOST_IMAGE=%s\n'        "$(shq "${GHOST_IMAGE:-ghost:6-alpine}")"
   printf 'MYSQL_IMAGE=%s\n'        "$(shq "${MYSQL_IMAGE:-mysql:8.0}")"
   printf 'CLOUDFLARED_IMAGE=%s\n'  "$(shq "${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}")"
-  printf 'MAIL_IMAGE=%s\n\n'       "$(shq "${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.7}")"
+  printf 'MAIL_IMAGE=%s\n'         "$(shq "${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.7}")"
+  printf 'RCLONE_IMAGE=%s\n\n'     "$(shq "${RCLONE_IMAGE:-rclone/rclone:1.76.0}")"
   printf '# Resource caps (override on low-memory Pis).\n'
   printf 'GHOST_MEM_LIMIT=%s\n'        "$(shq "${GHOST_MEM_LIMIT:-768m}")"
   printf 'DB_MEM_LIMIT=%s\n'           "$(shq "${DB_MEM_LIMIT:-512m}")"
@@ -384,3 +446,9 @@ case "${MAIL_MODE}" in
   smtp) echo "   Mail: external SMTP via ${MAIL_HOST}:${MAIL_PORT}" ;;
   none) echo "   Mail: disabled (re-run with MAIL_MODE=builtin to enable)" ;;
 esac
+if [[ "${OFFSITE}" == "r2" ]]; then
+  echo "   Off-site backups: Cloudflare R2, bucket ${R2_BUCKET} (keeping ${OFFSITE_KEEP})"
+  echo "         Check the credentials with: ./scripts/offsite.sh test"
+else
+  echo "   Off-site backups: off (OFFSITE=r2 ./setup.sh to enable)"
+fi
