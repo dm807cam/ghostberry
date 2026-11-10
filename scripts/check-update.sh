@@ -53,6 +53,12 @@ fi
 
 installed="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
 [[ -n "${installed}" ]] || { echo "❌ VERSION file missing; re-run the installer." >&2; exit 1; }
+# The banner uses the version setup.sh recorded in .env; if the code was
+# changed without the installer (e.g. a manual `git pull`), they disagree.
+if [[ -n "${GHOSTBERRY_VERSION:-}" && "${GHOSTBERRY_VERSION}" != "${installed}" ]]; then
+  echo "⚠️  The code here is ${installed} but the settings are from ${GHOSTBERRY_VERSION}." >&2
+  echo "   Re-run the install command to finish updating (it also fixes Ghost Admin's banner)." >&2
+fi
 feed="${UPDATE_FEED:-https://dm807cam.github.io/ghostberry/update-check}"
 
 if ! latest_json="$(curl -fsS -m 20 "${feed}/latest.json")"; then
@@ -70,13 +76,15 @@ if [[ "$(printf '%s\n%s\n' "${installed}" "${latest}" | sort -V | tail -n 1)" ==
   exit 0
 fi
 
-echo "⬆️  Ghostberry ${latest} is available (this Pi runs ${installed})."
-echo "   Update: ${install_cmd}"
-
 if [[ "$(cat "${STATE}" 2>/dev/null || true)" == "${latest}" ]]; then
+  # Already announced; cron (--quiet) stays silent instead of logging daily.
+  say "⬆️  Ghostberry ${latest} is available (this Pi runs ${installed})."
+  say "   Update: ${install_cmd}"
   say "   Admins were already emailed about ${latest}."
   exit 0
 fi
+echo "⬆️  Ghostberry ${latest} is available (this Pi runs ${installed})."
+echo "   Update: ${install_cmd}"
 if [[ -z "${MAIL_HOST:-}" ]]; then
   say "   Email is off (MAIL_MODE=${MAIL_MODE:-none}); Ghost Admin still shows a banner."
   exit 0

@@ -2,9 +2,10 @@
 # scripts/offsite.sh). A Ghostberry release bumps them; re-running the
 # installer applies them. Override one in .env only if you must, e.g.
 # GHOST_IMAGE=ghost:6.80.0-alpine; an override is never updated for you.
+# GHOST_IMAGE_HOLD is set by setup.sh only to avoid a downgrade (see there).
 services:
   ghost:
-    image: ${GHOST_IMAGE:-ghost:6.75.0-alpine}
+    image: ${GHOST_IMAGE:-${GHOST_IMAGE_HOLD:-ghost:6.75.0-alpine}}
     container_name: ghost
     restart: unless-stopped
     environment:

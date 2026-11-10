@@ -196,6 +196,8 @@ systemctl enable --now docker
 # 4. Source: clone or update
 # ----------------------------------------------------------------------------
 OLD_VERSION="$(tr -d '[:space:]' < "${INSTALL_DIR}/VERSION" 2>/dev/null || true)"
+# Installs from before versioning have a .env but no VERSION file.
+[[ -z "${OLD_VERSION}" && -f "${INSTALL_DIR}/.env" ]] && OLD_VERSION="pre-1.0"
 log "Fetching ghostberry into ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 # Recursive: previous runs may have left mixed ownership (e.g. root-owned
@@ -321,18 +323,20 @@ fi
 # ----------------------------------------------------------------------------
 # 9. Start
 # ----------------------------------------------------------------------------
-# Moved to a new release: drop the "Ghostberry x.y.z is available" banner
-# from Ghost Admin (Ghost re-reads it when its container is recreated below).
-if [[ -n "${OLD_VERSION}" && "${OLD_VERSION}" != "${NEW_VERSION}" ]] \
-   && [[ "$(docker inspect -f '{{.State.Running}}' ghost_db 2>/dev/null || true)" == "true" ]]; then
-  sudo -u "${GHOSTBERRY_USER}" ./scripts/check-update.sh --clear-notices || true
-fi
-
 log "Pulling container images"
 # Each release pins exact versions in docker-compose.yml; fetch them before
 # (re)starting. On failure, keep going with the images already on the Pi.
 docker compose pull --quiet \
   || warn "Couldn't pull every image (network or registry rate limit); continuing with local images. Re-run later to finish updating."
+
+# Moved to a new release: drop the "Ghostberry x.y.z is available" banner
+# from Ghost Admin. Ghost caches its notifications and could write the old
+# one back, so stop it first; it's recreated a few seconds later below.
+if [[ -n "${OLD_VERSION}" && "${OLD_VERSION}" != "${NEW_VERSION}" ]] \
+   && [[ "$(docker inspect -f '{{.State.Running}}' ghost_db 2>/dev/null || true)" == "true" ]]; then
+  docker compose stop ghost >/dev/null 2>&1 || true
+  sudo -u "${GHOSTBERRY_USER}" ./scripts/check-update.sh --clear-notices || true
+fi
 
 log "Starting Ghostberry"
 if systemctl is-active --quiet ghostberry.service; then

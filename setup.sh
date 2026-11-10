@@ -334,6 +334,27 @@ for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
   esac
 done
 
+# Never downgrade Ghost: a Ghost older than the one that migrated the
+# database refuses to start (MIGRATION_STATE_ERROR). If the Ghost running
+# now is newer than this release pins (e.g. pulled via the old floating
+# ghost:6-alpine tag), hold it until a release pins that version or newer.
+pinned_ghost="$(sed -nE 's/.*GHOST_IMAGE_HOLD:-ghost:([0-9]+\.[0-9]+\.[0-9]+)-alpine.*/\1/p' docker-compose.yml | head -n 1)"
+running_ghost="$(docker exec ghost node -p 'require("/var/lib/ghost/current/package.json").version' 2>/dev/null || true)"
+semver_gt() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" == "$1" ]]; }
+: "${GHOST_IMAGE_HOLD:=}"
+if [[ -n "${GHOST_IMAGE:-}" || ! "${pinned_ghost}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  GHOST_IMAGE_HOLD=""                       # explicit override wins / can't tell
+elif [[ "${running_ghost}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && semver_gt "${running_ghost}" "${pinned_ghost}"; then
+  GHOST_IMAGE_HOLD="ghost:${running_ghost}-alpine"
+  warn "This Pi runs Ghost ${running_ghost}, newer than the ${pinned_ghost} this release pins."
+  warn "Keeping ${running_ghost} (Ghost can't be downgraded); a later release will move it on."
+elif [[ -n "${GHOST_IMAGE_HOLD}" ]]; then
+  held="${GHOST_IMAGE_HOLD#ghost:}"; held="${held%-alpine}"
+  if ! semver_gt "${held}" "${pinned_ghost}"; then
+    GHOST_IMAGE_HOLD=""                     # the release caught up: follow the pin again
+  fi
+fi
+
 # --- Ghostberry version & update notices ------------------------------------
 # Ghost's daily update check reads <feed>/v<this version>.json: it exists
 # only once a newer release is out, and then shows a banner in Ghost Admin.
@@ -448,6 +469,7 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'UPDATE_FEED=%s\n'          "$(shq "${UPDATE_FEED}")"
   printf 'UPDATE_CHECK_URL=%s\n'     "$(shq "${UPDATE_CHECK_URL}")"
   [[ -n "${GHOSTBERRY_FEED_URL:-}" ]] && printf 'GHOSTBERRY_FEED_URL=%s\n' "$(shq "${GHOSTBERRY_FEED_URL}")"
+  [[ -n "${GHOST_IMAGE_HOLD}" ]] && printf '# Set by setup.sh to avoid downgrading Ghost; cleared automatically.\nGHOST_IMAGE_HOLD=%s\n' "$(shq "${GHOST_IMAGE_HOLD}")"
   printf '\n# Image overrides. Empty = the version this Ghostberry release pins\n'
   printf '# (docker-compose.yml). A tag set here is never updated for you.\n'
   for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
