@@ -78,8 +78,7 @@ The script will:
 6. Restore the mail DKIM key (if the archive has one).
 7. Start Ghost and tail its logs.
 
-`./scripts/update.sh` always runs a backup first and stops if it fails. So
-does re-running the installer on a live install.
+Re-running the installer (which is how you update) takes a backup first on a live install.
 
 ## Off-site copies (Cloudflare R2)
 
@@ -116,7 +115,7 @@ dies, they die with it. Ghostberry can copy every backup to
    The installer offers the same prompts, or takes `OFFSITE=r2 R2_ACCOUNT_ID=… R2_BUCKET=…
    R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=…` for an unattended install.
 
-From then on, every backup (the nightly one and the one `update.sh` takes) is uploaded
+From then on, every backup (the nightly one and the one the installer takes before an update) is uploaded
 and R2 is pruned to the newest `OFFSITE_KEEP` (default 7). If the upload fails, the local
 backup is still kept, `backup.sh` exits with code 3, and the error is in
 `/var/log/ghostberry-backup.log`.

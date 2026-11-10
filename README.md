@@ -18,6 +18,7 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 - 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
 - 💾 **Daily encrypted backups** via cron, with a real `restore.sh`, and optional off-site copies in **Cloudflare R2** (free up to 10 GB), so a dead SD card doesn't take your blog with it
 - 🚀 **systemd unit** for clean boot/shutdown
+- 🔔 **Update notices:** a banner in Ghost Admin and one email to the admins when a new Ghostberry release is out. Updating is re-running the install command, which moves to the exact image versions that release pins
 - 🍓 **Pi-aware bootstrap** — enables memory cgroups, ensures swap, installs Docker
 
 ## Requirements
@@ -88,6 +89,40 @@ Optional flags:
 
 After install, browse to `https://blog.example.com/ghost` to create the admin account.
 
+## Updating
+
+Run the install command again. That's the whole update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
+```
+
+It takes a backup, moves the code to the newest release, pulls the exact
+container versions that release pins (Ghost, MySQL, cloudflared, maddy, rclone),
+and restarts. Your `.env` settings are kept.
+
+**You don't have to watch for releases.** When a new Ghostberry version is out:
+
+- **Ghost Admin shows a banner** at the top: "Ghostberry x.y.z is available". Ghost's
+  daily update check reads Ghostberry's feed instead of Ghost's own.
+- **The blog's Owner and Administrators get one email**, sent through the blog's
+  own mail setup (built-in server or SMTP provider).
+
+The version on your Pi is in `/opt/ghostberry/VERSION`; what changed is in
+[CHANGELOG.md](CHANGELOG.md). Turn notices off with
+`UPDATE_NOTICES=off ./setup.sh && docker compose up -d`. That also restores
+Ghost's own update feed.
+
+**Pinning one image yourself:** set e.g. `GHOST_IMAGE=ghost:6.80.0-alpine` in `.env`.
+A pinned image is never changed by updates until you remove the line again.
+
+### Releasing (maintainers)
+
+In the PR that makes the change: bump `VERSION`, add a `## [x.y.z] - YYYY-MM-DD`
+entry at the top of `CHANGELOG.md`, run `tools/build-update-feed.sh` and commit
+the regenerated `docs/update-check/`. Merging to `main` publishes it: GitHub Pages
+serves the feed, and every install shows the banner within a day.
+
 ## Daily life
 
 ```bash
@@ -108,8 +143,8 @@ docker compose logs -f
 # Restore from a backup
 ./scripts/restore.sh backups/ghost_backup_20260514T021700Z.tar.gz
 
-# Update Ghost / MySQL / cloudflared / mail images (takes a backup first)
-./scripts/update.sh
+# Is a newer Ghostberry release out? (a daily cron job also checks)
+./scripts/check-update.sh
 
 # Email: DNS records to publish, send a test, check the queue
 ./scripts/mail.sh dns
@@ -137,7 +172,7 @@ MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
 │   ├── backup.sh           # mysqldump + content tar + DKIM key, AES-256, → R2
 │   ├── offsite.sh          # Cloudflare R2: test | push | list | pull | status
 │   ├── restore.sh          # inverse of backup
-│   ├── update.sh           # backup → pull → up -d → wait healthy
+│   ├── check-update.sh     # daily: new release? email the admins once
 │   └── mail.sh             # dns | test <addr> | status
 ├── guides/
 │   ├── MAIL.md
@@ -169,7 +204,7 @@ More in [guides/TROUBLESHOOTING.md](guides/TROUBLESHOOTING.md).
 
 ## Upgrading from Ghost 5
 
-Ghost 5 no longer gets updates. Re-running the installer moves an install on the old `ghost:5-alpine` default to `ghost:6-alpine`; it takes a backup first. (`./setup.sh` on its own makes the same change but does **not** back up, so run `./scripts/backup.sh` before `docker compose up -d`.) Ghost migrates the database on first start. Before you upgrade:
+Ghost 5 no longer gets updates. Re-running the installer moves an install on the old `ghost:5-alpine` default to the Ghost 6 version the current release pins; it takes a backup first. (`./setup.sh` on its own makes the same change but does **not** back up, so run `./scripts/backup.sh` before `docker compose up -d`.) Ghost migrates the database on first start. Before you upgrade:
 
 - Check your theme at [gscan.ghost.org](https://gscan.ghost.org): Ghost 6 removed AMP.
 - Custom integrations must stop using `?limit=all` and paginate instead.

@@ -203,14 +203,11 @@ The optional `ghost_mail` container (maddy, see [MAIL.md](MAIL.md)) is **send-on
 
 ### Image Security
 
-**Version pinning**: image tags are set in `.env`. The defaults track maintained release lines so `./scripts/update.sh` picks up security fixes:
-```bash
-GHOST_IMAGE=ghost:6-alpine                    # latest Ghost 6.x
-MYSQL_IMAGE=mysql:8.0                         # latest 8.0 patch (Ghost's own Docker setup uses 8.0)
-CLOUDFLARED_IMAGE=cloudflare/cloudflared:latest
-MAIL_IMAGE=ghcr.io/foxcpp/maddy:0.9.7         # exact pin; bump deliberately
-```
-For fully reproducible deploys, pin exact versions (e.g. `ghost:6.75.0-alpine`) and bump them yourself.
+**Version pinning**: every image is pinned to an exact version in `docker-compose.yml`
+(rclone in `scripts/offsite.sh`). Each Ghostberry release bumps them, and the weekly
+audit watches for security fixes, so an update is: get notified (banner in Ghost Admin
+plus an email), then re-run the install command. Override one image in `.env` only if
+you must; an override is never updated for you.
 
 **Benefits of exact pins**:
 - Predictable deployments
@@ -218,35 +215,21 @@ For fully reproducible deploys, pin exact versions (e.g. `ghost:6.75.0-alpine`) 
 - Control over updates
 - Ability to test before upgrading
 
-**Update Process**:
+**Update Process**: re-run the install command. It backs up, moves to the newest
+release's pinned versions, restarts and waits for Ghost to report healthy:
 ```bash
-# 1. Backup first
-./scripts/backup.sh
-
-# 2. Update image versions in .env (if you pin exact versions)
-
-# 3. Pull new images
-docker compose pull
-
-# 4. Test in development first (if possible)
-
-# 5. Deploy
-docker compose up -d
-
-# 6. Verify health
-docker compose ps
-docker compose logs -f
+curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 ```
 
 ### Security Scanning
 
 Scan images for vulnerabilities:
 ```bash
-# Using Docker Scout (if available)
-docker scout cves ghost:6-alpine
-
-# Using Trivy
-docker run --rm aquasec/trivy image ghost:6-alpine
+cd /opt/ghostberry
+# Every image this install runs, at the exact pinned versions
+for img in $(docker compose config --images); do
+  docker run --rm aquasec/trivy image --severity HIGH,CRITICAL --ignore-unfixed "$img"
+done
 ```
 
 ### Read-Only Root Filesystem
@@ -412,22 +395,13 @@ crontab -e
 # 1. Update Raspberry Pi OS
 sudo apt update && sudo apt upgrade -y
 
-# 2. Backup before updates
-./scripts/backup.sh
+# 2. Ghostberry: if Ghost Admin shows an update banner (or you got the email),
+#    re-run the install command. It backs up, updates and checks health itself.
+cd /opt/ghostberry && ./scripts/check-update.sh
 
-# 3. Update Docker images
-docker compose pull
-
-# 4. Restart with new images
-docker compose up -d
-
-# 5. Verify health
-sleep 30
+# 3. Verify health
 docker compose ps
 docker compose logs --tail=50
-
-# 6. Check for vulnerabilities
-docker scout cves ghost:6-alpine
 ```
 
 ### Log Monitoring

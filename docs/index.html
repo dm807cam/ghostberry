@@ -351,8 +351,8 @@
       </div>
       <div class="card">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></div>
-        <h3>Updates with a safety net</h3>
-        <p><code>update.sh</code> backs up first, pulls new images, recreates the stack and waits until Ghost reports healthy. systemd starts it all on boot.</p>
+        <h3>Updates that find you</h3>
+        <p>When a new release is out, Ghost Admin shows a banner and your admins get one email. To update, run the install command again: it backs up first and waits until Ghost is healthy.</p>
       </div>
       <div class="card">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></div>
@@ -458,7 +458,8 @@
       <tbody>
         <tr><td><code>./scripts/backup.sh</code></td><td>Back up now (one also runs every night)</td></tr>
         <tr><td><code>./scripts/restore.sh backups/&lt;file&gt;</code></td><td>Restore database, content and mail key from a backup</td></tr>
-        <tr><td><code>./scripts/update.sh</code></td><td>Back up, pull new images, restart, wait until healthy</td></tr>
+        <tr><td><code>curl -fsSL …/install.sh | sudo bash</code></td><td>Update: the same install command, run again</td></tr>
+        <tr><td><code>./scripts/check-update.sh</code></td><td>Is a newer Ghostberry release out?</td></tr>
         <tr><td><code>./scripts/mail.sh test you@example.com</code></td><td>Send a test email the way Ghost does</td></tr>
         <tr><td><code>./scripts/mail.sh status</code></td><td>Mail server health, queue and recent log</td></tr>
         <tr><td><code>./scripts/offsite.sh status</code></td><td>Last upload to Cloudflare R2 and space used</td></tr>
@@ -484,9 +485,9 @@
           <li>Installs Docker (official script), git, curl, openssl and jq.</li>
           <li>Clones the project to <code>/opt/ghostberry</code>.</li>
           <li>Writes <code>.env</code> with generated 40-character database passwords and a backup key, and asks how to send email and whether to copy backups to Cloudflare R2.</li>
-          <li>Installs a systemd unit and a nightly backup job, then starts everything and waits for Ghost to report healthy.</li>
+          <li>Installs a systemd unit, a nightly backup job and a daily update check, then starts everything and waits for Ghost to report healthy.</li>
         </ul>
-        <p>Re-running it updates the code and settings. If Ghostberry is already running, it takes a backup first.</p>
+        <p>Re-running it is how you update: it backs up first, then moves to the newest release and the exact container versions it pins.</p>
       </details>
 
       <details>
@@ -503,6 +504,15 @@
         <p>Newsletters need a Mailgun account, because Ghost only sends bulk email through Mailgun. Ghost 6's
         ActivityPub ("Network") and web analytics features need extra services that Ghostberry doesn't run yet.
         Everything else in Ghost works.</p>
+      </details>
+
+      <details>
+        <summary>How do I update, and how do I know when to?</summary>
+        <p>When a new Ghostberry release is out, Ghost Admin shows a banner at the top and the blog's
+        Owner and Administrators get one email. To update, run the install command again: it takes a
+        backup, moves to the new release and the exact container versions it pins (Ghost, MySQL,
+        cloudflared and the rest), then restarts and checks Ghost is healthy. Your settings are kept.
+        What changed is in the <a href="https://github.com/dm807cam/ghostberry/blob/main/CHANGELOG.md">changelog</a>.</p>
       </details>
 
       <details>
@@ -555,6 +565,7 @@
     <div>MIT licensed. Not affiliated with the Ghost Foundation; Ghost is their trademark.</div>
     <div>
       <a href="https://github.com/dm807cam/ghostberry">Source</a> ·
+      <a href="https://github.com/dm807cam/ghostberry/blob/main/CHANGELOG.md">Changelog</a> ·
       <a href="https://github.com/dm807cam/ghostberry/issues">Issues</a> ·
       <a href="https://github.com/dm807cam/ghostberry/blob/main/guides/SECURITY.md">Security</a> ·
       <a href="https://ghost.org/">Ghost</a>

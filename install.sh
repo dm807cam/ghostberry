@@ -4,6 +4,9 @@
 # Quick install:
 #   curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash
 #
+# Re-run the same command to UPDATE: it backs up, moves the checkout and the
+# container images to the newest Ghostberry release, and restarts.
+#
 # What it does (idempotent):
 #   1. Verifies Debian/Raspberry Pi OS on aarch64 or x86_64
 #   2. Enables memory + swap cgroups in /boot firmware cmdline (if Pi)
@@ -13,7 +16,8 @@
 #   6. Runs setup.sh interactively (prompts for domain, tunnel token, and
 #      how Ghost should send email — built-in mail server by default)
 #   7. Installs the ghostberry.service systemd unit
-#   8. Installs a daily cron job for backups
+#   8. Installs daily cron jobs: backup, and the update check that emails
+#      the blog's admins when a new Ghostberry release is out
 #   9. (with --harden) installs ufw (deny incoming, allow SSH; replaces
 #      existing ufw rules) + unattended-upgrades
 #  10. Backs up an existing install, then docker compose up -d, polls health
@@ -191,6 +195,7 @@ systemctl enable --now docker
 # ----------------------------------------------------------------------------
 # 4. Source: clone or update
 # ----------------------------------------------------------------------------
+OLD_VERSION="$(tr -d '[:space:]' < "${INSTALL_DIR}/VERSION" 2>/dev/null || true)"
 log "Fetching ghostberry into ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 # Recursive: previous runs may have left mixed ownership (e.g. root-owned
@@ -214,6 +219,14 @@ else
 fi
 
 cd "${INSTALL_DIR}"
+NEW_VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || echo unknown)"
+if [[ -z "${OLD_VERSION}" ]]; then
+  log "Ghostberry ${NEW_VERSION}"
+elif [[ "${OLD_VERSION}" != "${NEW_VERSION}" ]]; then
+  log "Updating Ghostberry ${OLD_VERSION} → ${NEW_VERSION} (see CHANGELOG.md)"
+else
+  log "Ghostberry ${NEW_VERSION} (already the newest release; re-applying)"
+fi
 chmod +x setup.sh scripts/*.sh 2>/dev/null || true
 
 # Re-run on a live install: take a backup before anything changes (image
@@ -272,6 +285,25 @@ chmod 644 "${CRON_FILE}"
 touch /var/log/ghostberry-backup.log
 chown "${GHOSTBERRY_USER}":"${GHOSTBERRY_USER}" /var/log/ghostberry-backup.log
 
+log "Installing daily update check"
+UPDATE_CRON=/etc/cron.d/ghostberry-update-check
+# Keep an existing schedule on re-runs; new installs get a random daytime
+# minute so the feed isn't hit by every Pi at once.
+if [[ -f "${UPDATE_CRON}" ]] && grep -q 'check-update.sh' "${UPDATE_CRON}"; then
+  UPDATE_AT="$(grep 'check-update.sh' "${UPDATE_CRON}" | awk '{print $1" "$2}')"
+else
+  UPDATE_AT="$((RANDOM % 60)) $((8 + RANDOM % 12))"
+fi
+cat > "${UPDATE_CRON}" <<CRON
+# Ghostberry — daily check for a new release (emails admins once per release)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+${UPDATE_AT} * * * ${GHOSTBERRY_USER} cd ${INSTALL_DIR} && ./scripts/check-update.sh --quiet >> /var/log/ghostberry-update.log 2>&1
+CRON
+chmod 644 "${UPDATE_CRON}"
+touch /var/log/ghostberry-update.log
+chown "${GHOSTBERRY_USER}":"${GHOSTBERRY_USER}" /var/log/ghostberry-update.log
+
 # ----------------------------------------------------------------------------
 # 8. Optional hardening
 # ----------------------------------------------------------------------------
@@ -289,6 +321,19 @@ fi
 # ----------------------------------------------------------------------------
 # 9. Start
 # ----------------------------------------------------------------------------
+# Moved to a new release: drop the "Ghostberry x.y.z is available" banner
+# from Ghost Admin (Ghost re-reads it when its container is recreated below).
+if [[ -n "${OLD_VERSION}" && "${OLD_VERSION}" != "${NEW_VERSION}" ]] \
+   && [[ "$(docker inspect -f '{{.State.Running}}' ghost_db 2>/dev/null || true)" == "true" ]]; then
+  sudo -u "${GHOSTBERRY_USER}" ./scripts/check-update.sh --clear-notices || true
+fi
+
+log "Pulling container images"
+# Each release pins exact versions in docker-compose.yml; fetch them before
+# (re)starting. On failure, keep going with the images already on the Pi.
+docker compose pull --quiet \
+  || warn "Couldn't pull every image (network or registry rate limit); continuing with local images. Re-run later to finish updating."
+
 log "Starting Ghostberry"
 if systemctl is-active --quiet ghostberry.service; then
   # The unit is a oneshot with RemainAfterExit, so `start` would be a no-op
@@ -338,16 +383,20 @@ if grep -qE '^OFFSITE="r2"' "${INSTALL_DIR}/.env"; then
     || warn "R2 check failed. Fix the R2_* values (re-run ./setup.sh), then: ./scripts/offsite.sh test"
 fi
 
+# Confirms the update feed is reachable (and says so if this isn't the newest release).
+sudo -u "${GHOSTBERRY_USER}" ./scripts/check-update.sh || true
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────────
-✅ Ghostberry installed at ${INSTALL_DIR}
+✅ Ghostberry ${NEW_VERSION} installed at ${INSTALL_DIR}
    Admin URL: ${GHOST_URL_DISPLAY}/ghost
    Service:   sudo systemctl status ghostberry
    Logs:      cd ${INSTALL_DIR} && docker compose logs -f
    Backup:    cd ${INSTALL_DIR} && ./scripts/backup.sh
    Restore:   cd ${INSTALL_DIR} && ./scripts/restore.sh backups/<file>
-   Update:    cd ${INSTALL_DIR} && ./scripts/update.sh
+   Update:    re-run the install command (Ghost Admin shows a banner and the
+              admins get an email when a new release is out)
    Mail:      cd ${INSTALL_DIR} && ./scripts/mail.sh test you@example.com
    Off-site:  cd ${INSTALL_DIR} && ./scripts/offsite.sh status
 

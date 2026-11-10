@@ -5,6 +5,7 @@
 #                                    mail server, and whether they're live
 #   ./scripts/mail.sh test <address> send a test email the same way Ghost does
 #   ./scripts/mail.sh status         container health, queue and recent log
+#   ./scripts/mail.sh send <to> <subject>   send stdin as a plain-text email
 
 set -euo pipefail
 
@@ -20,7 +21,7 @@ compose() {
   if docker compose version &>/dev/null; then docker compose "$@"; else docker-compose "$@"; fi
 }
 
-usage() { sed -n '4,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '4,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 need_builtin() {
   if [[ "${MAIL_MODE:-}" != "builtin" ]]; then
@@ -93,30 +94,45 @@ cmd_dns() {
   fi
 }
 
+# send <to[,to2,...]> <subject>  — body is read from stdin (plain text).
+# Runs inside the Ghost container with Ghost's own nodemailer and the same
+# mail__* settings Ghost uses, so it works for the built-in server and for
+# an external SMTP provider alike, and a pass means Ghost can send too.
+send_mail() {
+  local to="$1" subject="$2"
+  [[ -n "${MAIL_HOST:-}" ]] || { echo "❌ Mail is disabled (MAIL_HOST is empty). Re-run ./setup.sh." >&2; return 1; }
+  compose exec -T -e MAIL_TO="${to}" -e MAIL_SUBJECT="${subject}" ghost node -e '
+    const nodemailer = require("/var/lib/ghost/current/node_modules/nodemailer");
+    const e = process.env;
+    let text = "";
+    process.stdin.on("data", d => text += d).on("end", () => {
+      const opts = { host: e.mail__options__host, port: Number(e.mail__options__port),
+                     secure: e.mail__options__secure === "true" };
+      if (e.mail__options__auth__user) opts.auth = { user: e.mail__options__auth__user, pass: e.mail__options__auth__pass };
+      const host = new URL(e.url).hostname.replace(/^www\./, "");
+      const from = e.mail__from || `noreply@${host}`;
+      nodemailer.createTransport(opts).sendMail({ from, to: e.MAIL_TO, subject: e.MAIL_SUBJECT, text })
+        .then(i => console.log("✅ accepted:", i.response),
+              err => { console.error("❌", err.message); process.exit(1); });
+    });
+  '
+}
+
 cmd_test() {
   local to="${1:-}"
   [[ -n "${to}" ]] || usage
   [[ -n "${MAIL_HOST:-}" ]] || { echo "❌ Mail is disabled (MAIL_HOST is empty). Re-run ./setup.sh." >&2; exit 1; }
   echo "▶ Sending a test email to ${to} through ${MAIL_HOST}:${MAIL_PORT} (Ghost's settings)"
-  # Runs inside the Ghost container with Ghost's own nodemailer and the same
-  # mail__* settings Ghost uses, so a pass here means Ghost can send too.
-  compose exec -T -e TEST_TO="${to}" ghost node -e '
-    const nodemailer = require("/var/lib/ghost/current/node_modules/nodemailer");
-    const e = process.env;
-    const opts = { host: e.mail__options__host, port: Number(e.mail__options__port),
-                   secure: e.mail__options__secure === "true" };
-    if (e.mail__options__auth__user) opts.auth = { user: e.mail__options__auth__user, pass: e.mail__options__auth__pass };
-    const host = new URL(e.url).hostname.replace(/^www\./, "");
-    const from = e.mail__from || `noreply@${host}`;
-    nodemailer.createTransport(opts).sendMail({
-      from, to: e.TEST_TO, subject: "Ghostberry test email",
-      text: `This is a test from your Ghost site ${e.url}.\nIf you can read this, Ghost email works.`
-    }).then(i => { console.log("✅ accepted:", i.response); },
-            err => { console.error("❌", err.message); process.exit(1); });
-  '
+  printf 'This is a test from your Ghost site %s.\nIf you can read this, Ghost email works.\n' "${GHOST_URL}" \
+    | send_mail "${to}" "Ghostberry test email"
   if [[ "${MAIL_MODE:-}" == "builtin" ]]; then
     echo "   The built-in server queued it. Delivery result: ./scripts/mail.sh status"
   fi
+}
+
+cmd_send() {
+  [[ $# -eq 2 ]] || usage
+  send_mail "$1" "$2"
 }
 
 cmd_status() {
@@ -133,6 +149,7 @@ cmd_status() {
 case "${1:-}" in
   dns)    cmd_dns ;;
   test)   shift; cmd_test "$@" ;;
+  send)   shift; cmd_send "$@" ;;
   status) cmd_status ;;
   *)      usage ;;
 esac
