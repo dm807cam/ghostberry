@@ -86,7 +86,7 @@ OVERRIDABLE=(
   GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT
   MYSQL_BUFFER_POOL BACKUP_KEEP
   OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
-  R2_JURISDICTION R2_PREFIX OFFSITE_KEEP RCLONE_IMAGE
+  R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE
 )
 declare -A FROM_ENV=()
 for v in "${OVERRIDABLE[@]}"; do
@@ -399,6 +399,8 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'R2_BUCKET=%s\n'            "$(shq "${R2_BUCKET}")"
   printf 'R2_JURISDICTION=%s\n'      "$(shq "${R2_JURISDICTION}")"
   printf 'R2_PREFIX=%s\n'            "$(shq "${R2_PREFIX}")"
+  printf '# Advanced: custom S3 endpoint; empty = derived from account + jurisdiction.\n'
+  printf 'R2_ENDPOINT=%s\n'          "$(shq "${R2_ENDPOINT:-}")"
   printf 'R2_ACCESS_KEY_ID=%s\n'     "$(shq "${R2_ACCESS_KEY_ID}")"
   printf 'R2_SECRET_ACCESS_KEY=%s\n' "$(shq "${R2_SECRET_ACCESS_KEY}")"
   printf 'OFFSITE_KEEP=%s\n\n'        "$(shq "${OFFSITE_KEEP}")"

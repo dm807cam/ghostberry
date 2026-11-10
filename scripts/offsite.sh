@@ -107,8 +107,10 @@ cmd_test() {
   probe="${BACKUP_DIR}/${obj}"
   echo "▶ Testing R2 bucket '${R2_BUCKET}' at $(endpoint)"
   echo "ghostberry offsite test" > "${probe}"
-  trap 'rm -f "${probe}"' RETURN
-  if ! rclone copyto "/backups/${obj}" "$(REMOTE)/${obj}" 2>&1; then
+  local up=0
+  rclone copyto "/backups/${obj}" "$(REMOTE)/${obj}" 2>&1 || up=$?
+  rm -f "${probe}"
+  if (( up != 0 )); then
     echo "❌ Upload failed. Check R2_ACCOUNT_ID, R2_BUCKET, the jurisdiction and the token" >&2
     echo "   (it needs 'Object Read & Write' on this bucket)." >&2
     return 1
@@ -134,11 +136,11 @@ cmd_prune() {
   n=$(( ${#all[@]} - OFFSITE_KEEP ))
   if (( n <= 0 )); then echo "  • R2 holds ${#all[@]} backup(s); nothing to prune (keeping ${OFFSITE_KEEP})"; return 0; fi
   echo "  • pruning R2 to the newest ${OFFSITE_KEEP} (removing ${n})"
-  local f rc=0
-  for f in "${all[@]:0:n}"; do
-    rclone deletefile "$(REMOTE)/${f}" || { echo "    ⚠️  could not delete ${f} (bucket lock?)" >&2; rc=1; }
-  done
-  return "${rc}"
+  # One rclone call for the whole list (names are read from stdin).
+  if ! printf '%s\n' "${all[@]:0:n}" | rclone delete "$(REMOTE)" --files-from-raw - ; then
+    echo "    ⚠️  some old backups could not be deleted (bucket lock?); will retry next time" >&2
+    return 1
+  fi
 }
 
 cmd_push() {
@@ -160,7 +162,9 @@ cmd_push() {
   # copyto verifies size and checksum after the transfer.
   rclone copyto "/backups/${name}" "$(REMOTE)/${name}"
   date -u +"%Y-%m-%dT%H:%M:%SZ ${name}" > "${MARKER}"
-  cmd_prune
+  # The upload succeeded; a prune problem (e.g. a still-locked object) is
+  # only a warning, so backup.sh doesn't report a failed off-site copy.
+  cmd_prune || true
 }
 
 cmd_list() {

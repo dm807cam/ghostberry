@@ -103,7 +103,7 @@ Full details: [MAIL.md](MAIL.md).
 | `backup.sh` exits with code 3 | The local backup worked; only the upload failed. Run `./scripts/offsite.sh test` |
 | `403` / `AccessDenied` / `SignatureDoesNotMatch` | Wrong key or secret, or the token isn't allowed on this bucket. Create a token with **Object Read & Write** on the bucket and re-run `./setup.sh` with the new `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` |
 | `NoSuchBucket` | `R2_BUCKET` is misspelled, or the bucket is in the EU jurisdiction: set `R2_JURISDICTION=eu` |
-| Delete fails during `test` or pruning | A bucket lock rule protects the object. Make the lock period shorter than `OFFSITE_KEEP` days |
+| `test` fails at delete, or pruning warns it couldn't delete | A bucket lock rule protects the object. Occasional prune warnings after extra backups are expected and harmless; if they happen every night, shorten the lock period |
 | `dial tcp … i/o timeout` | The Pi can't reach `*.r2.cloudflarestorage.com` (network or DNS). The next nightly run retries |
 
 ## Out of memory

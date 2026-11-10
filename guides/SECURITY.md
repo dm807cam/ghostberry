@@ -299,7 +299,7 @@ With `OFFSITE=r2`, every backup is uploaded to Cloudflare R2 by `scripts/offsite
   (not command-line arguments), inside a throwaway container that is read-only, non-root, with all
   capabilities dropped.
 - Pruning needs delete rights, so a compromised Pi could delete off-site copies. Add an R2 **bucket
-  lock rule** (prefix `ghostberry/`, retention shorter than `OFFSITE_KEEP` days) to make recent
+  lock rule** (prefix `ghostberry/`, retention comfortably shorter than `OFFSITE_KEEP` days, e.g. 3) to make recent
   backups undeletable. See [BACKUP.md](BACKUP.md#protect-against-a-hacked-pi-optional).
 - If the token leaks, delete it in R2 → Manage API tokens, create a new one, and re-run
   `R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… ./setup.sh`.
