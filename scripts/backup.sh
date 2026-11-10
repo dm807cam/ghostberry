@@ -11,6 +11,10 @@
 # the resulting archive with openssl.
 #
 # Retention: keeps the most recent $BACKUP_KEEP archives (default 7).
+#
+# Off-site: with OFFSITE=r2 in .env, the new archive is then uploaded to
+# Cloudflare R2 (scripts/offsite.sh). Exit codes: 0 = all good,
+# 3 = local backup OK but the off-site upload failed, other = local failure.
 
 set -euo pipefail
 
@@ -95,3 +99,14 @@ find "${BACKUP_DIR}" -maxdepth 1 -type f \
 
 SIZE="$(du -h "${ARCHIVE}" | cut -f1)"
 echo "✅ Backup complete: ${ARCHIVE} (${SIZE})"
+
+if [[ "${OFFSITE:-none}" == "r2" ]]; then
+  echo "▶ Off-site copy (Cloudflare R2)"
+  if "${SCRIPT_DIR}/offsite.sh" push "${ARCHIVE}"; then
+    echo "✅ Off-site copy complete"
+  else
+    echo "❌ Off-site upload FAILED. The local backup above is fine." >&2
+    echo "   Check: ./scripts/offsite.sh test" >&2
+    exit 3
+  fi
+fi

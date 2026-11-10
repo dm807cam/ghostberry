@@ -26,6 +26,8 @@
 #   CLOUDFLARE_TUNNEL_TOKEN  skip the token prompt
 #   BACKUP_ENCRYPTION_KEY    reuse an old key (disaster recovery; fresh installs only)
 #   MAIL_MODE          builtin | smtp | none  (skip the email prompt; see setup.sh)
+#   OFFSITE=r2 + R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#                      copy every backup to Cloudflare R2 (see guides/BACKUP.md)
 #   NONINTERACTIVE=1   refuse any prompting
 #   GHOSTBERRY_USER    user account to own the install (default: invoking user)
 #   SKIP_DOCKER=1      assume docker is already installed and working
@@ -218,8 +220,12 @@ chmod +x setup.sh scripts/*.sh 2>/dev/null || true
 # upgrades such as Ghost 5 → 6 migrate the database in place).
 if [[ -f .env ]] && [[ "$(docker inspect -f '{{.State.Running}}' ghost 2>/dev/null || true)" == "true" ]]; then
   log "Existing install detected — taking a backup first"
-  sudo -u "${GHOSTBERRY_USER}" ./scripts/backup.sh \
-    || warn "Backup failed; continuing. Check ${INSTALL_DIR}/backups before relying on it."
+  rc=0; sudo -u "${GHOSTBERRY_USER}" ./scripts/backup.sh || rc=$?
+  if (( rc == 3 )); then
+    warn "Local backup OK, but the off-site upload failed; continuing."
+  elif (( rc != 0 )); then
+    warn "Backup failed; continuing. Check ${INSTALL_DIR}/backups before relying on it."
+  fi
 fi
 
 # ----------------------------------------------------------------------------
@@ -235,7 +241,9 @@ for v in GHOST_URL CLOUDFLARE_TUNNEL_TOKEN \
          MAIL_RELAY_HOST MAIL_RELAY_PORT MAIL_RELAY_USER MAIL_RELAY_PASSWORD \
          GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE \
          GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT \
-         MYSQL_BUFFER_POOL BACKUP_KEEP BACKUP_ENCRYPTION_KEY; do
+         MYSQL_BUFFER_POOL BACKUP_KEEP BACKUP_ENCRYPTION_KEY \
+         OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+         R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE; do
   if [[ -n "${!v:-}" ]]; then SETUP_ENV+=("${v}=${!v}"); fi
 done
 sudo -u "${GHOSTBERRY_USER}" env "${SETUP_ENV[@]}" ./setup.sh
@@ -323,6 +331,13 @@ if [[ "${MAIL_MODE_SET}" == "builtin" ]]; then
   ./scripts/mail.sh dns || warn "Run ./scripts/mail.sh dns once the mail container is up."
 fi
 
+if grep -qE '^OFFSITE="r2"' "${INSTALL_DIR}/.env"; then
+  echo
+  log "Checking the Cloudflare R2 off-site backup credentials"
+  sudo -u "${GHOSTBERRY_USER}" ./scripts/offsite.sh test \
+    || warn "R2 check failed. Fix the R2_* values (re-run ./setup.sh), then: ./scripts/offsite.sh test"
+fi
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────────
@@ -334,6 +349,7 @@ cat <<EOF
    Restore:   cd ${INSTALL_DIR} && ./scripts/restore.sh backups/<file>
    Update:    cd ${INSTALL_DIR} && ./scripts/update.sh
    Mail:      cd ${INSTALL_DIR} && ./scripts/mail.sh test you@example.com
+   Off-site:  cd ${INSTALL_DIR} && ./scripts/offsite.sh status
 
 EOF
 

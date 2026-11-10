@@ -16,7 +16,13 @@ compose() {
 }
 
 echo "▶ Pre-update backup"
-"${SCRIPT_DIR}/backup.sh"
+rc=0; "${SCRIPT_DIR}/backup.sh" || rc=$?
+if (( rc == 3 )); then
+  echo "⚠️  Off-site upload failed, but the local backup succeeded; continuing." >&2
+elif (( rc != 0 )); then
+  echo "❌ Backup failed (exit ${rc}); not updating." >&2
+  exit "${rc}"
+fi
 
 echo "▶ Pulling latest images"
 compose pull

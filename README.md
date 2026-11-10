@@ -16,7 +16,7 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 - 📧 **Email that works from the first boot**: a built-in send-only mail server ([maddy](https://maddy.email), ~6 MB RAM) that DKIM-signs and queues Ghost's emails. Or plug in any SMTP provider. See [guides/MAIL.md](guides/MAIL.md)
 - 🔒 **Zero exposed ports** — every request reaches Ghost only through your Cloudflare Tunnel (DDoS protection + WAF for free)
 - 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
-- 💾 **Daily encrypted backups** via cron, with a real `restore.sh`
+- 💾 **Daily encrypted backups** via cron, with a real `restore.sh`, and optional off-site copies in **Cloudflare R2** (free up to 10 GB), so a dead SD card doesn't take your blog with it
 - 🚀 **systemd unit** for clean boot/shutdown
 - 🍓 **Pi-aware bootstrap** — enables memory cgroups, ensures swap, installs Docker
 
@@ -53,6 +53,8 @@ The installer asks for your domain, your Cloudflare Tunnel token, and how Ghost 
 3. **No email for now.**
 
 With the built-in server, the installer ends by printing the DNS records (DKIM, SPF, DMARC) to add in Cloudflare. Print them again any time with `./scripts/mail.sh dns`.
+
+Finally it offers **off-site backups to Cloudflare R2**. Recommended if the Pi runs from an SD card: every nightly backup is copied to R2 (free up to 10 GB), already encrypted. You need an R2 bucket and a bucket-scoped API token; [guides/BACKUP.md](guides/BACKUP.md#off-site-copies-cloudflare-r2) walks through it. Skip it now and turn it on later with `OFFSITE=r2 ./setup.sh`.
 
 For a fully unattended run, pre-set everything:
 
@@ -96,6 +98,10 @@ sudo systemctl status ghostberry
 docker compose ps
 docker compose logs -f
 
+# Off-site copies in Cloudflare R2 (if enabled)
+./scripts/offsite.sh status
+./scripts/offsite.sh pull latest     # e.g. on a new Pi, before restore.sh
+
 # Manual backup (cron already runs one nightly)
 ./scripts/backup.sh
 
@@ -128,7 +134,8 @@ MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
 │   ├── maddy.conf          # direct delivery
 │   └── maddy-relay.conf    # delivery via MAIL_RELAY_HOST
 ├── scripts/
-│   ├── backup.sh           # mysqldump + content tar + DKIM key, AES-256
+│   ├── backup.sh           # mysqldump + content tar + DKIM key, AES-256, → R2
+│   ├── offsite.sh          # Cloudflare R2: test | push | list | pull | status
 │   ├── restore.sh          # inverse of backup
 │   ├── update.sh           # backup → pull → up -d → wait healthy
 │   └── mail.sh             # dns | test <addr> | status
@@ -145,7 +152,7 @@ MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
 - **No published ports.** Nothing on the Pi listens publicly. The only way in is the Cloudflare Tunnel.
 - **Container hardening:** all services drop `ALL` capabilities and re-add only what's needed; `no-new-privileges` set; memory caps enforced.
 - **Secrets** live only in `.env` (mode `600`) and are never baked into images.
-- **Backups** are AES-256-encrypted via OpenSSL (`pbkdf2`, 200k iters) with an auto-generated 40-char passphrase stored in `.env`. Back that file up somewhere safe.
+- **Backups** are AES-256-encrypted via OpenSSL (`pbkdf2`, 200k iters) with an auto-generated 40-char passphrase stored in `.env`. Back that file up somewhere safe. Off-site copies in R2 are uploaded already encrypted, with a token limited to one bucket.
 - **Mail server is send-only and private.** It joins a dedicated Docker network shared only with Ghost, publishes no ports, only accepts senders from your own domain, and runs read-only with every capability dropped.
 - **Optional `--harden`** flag turns on the host firewall and unattended security upgrades.
 

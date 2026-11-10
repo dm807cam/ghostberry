@@ -81,19 +81,86 @@ The script will:
 `./scripts/update.sh` always runs a backup first and stops if it fails. So
 does re-running the installer on a live install.
 
-## Off-site copies
+## Off-site copies (Cloudflare R2)
 
-The local archive is encrypted, so you can safely push it anywhere:
+Local backups live on the same SD card as everything else. If the card
+dies, they die with it. Ghostberry can copy every backup to
+[Cloudflare R2](https://developers.cloudflare.com/r2/) as soon as it's made.
+
+- **Free up to 10 GB** of storage per month, with no download fees, so restoring costs nothing.
+  See [R2 pricing](https://developers.cloudflare.com/r2/pricing/).
+- **Only encrypted data leaves the Pi.** Archives are AES-256 encrypted before upload;
+  Cloudflare never sees your key.
+- **Nothing extra keeps running.** rclone runs in a throwaway, locked-down container for
+  the few seconds the upload takes.
+
+### Set it up
+
+1. **Enable R2.** In the [Cloudflare dashboard](https://dash.cloudflare.com/?to=/:account/r2/overview),
+   open **R2 object storage** and complete the checkout to add the R2 subscription.
+   Cloudflare asks for a payment method here even though the first 10 GB/month is free.
+   Usage beyond the free tier is billed.
+2. **Create a bucket**, e.g. `ghostberry-backups`. Default location is fine.
+   If you choose the EU jurisdiction, answer `eu` when asked later.
+3. **Create an API token:** on the R2 overview page, under **Account Details**, select
+   **Manage** next to **API Tokens** → **Create Account API token**. Permission
+   **Object Read & Write**, applied to **that bucket only**. Copy the **Access Key ID**
+   and **Secret Access Key** (the secret is shown only once). Your **Account ID** is in
+   the same **Account Details** section.
+4. **Tell Ghostberry:**
+   ```bash
+   cd /opt/ghostberry
+   OFFSITE=r2 ./setup.sh        # asks for account ID, bucket, keys
+   ./scripts/offsite.sh test    # uploads, reads and deletes a test file
+   ```
+   The installer offers the same prompts, or takes `OFFSITE=r2 R2_ACCOUNT_ID=… R2_BUCKET=…
+   R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=…` for an unattended install.
+
+From then on, every backup (the nightly one and the one `update.sh` takes) is uploaded
+and R2 is pruned to the newest `OFFSITE_KEEP` (default 7). If the upload fails, the local
+backup is still kept, `backup.sh` exits with code 3, and the error is in
+`/var/log/ghostberry-backup.log`.
+
+### Everyday commands
 
 ```bash
-# rclone — any of dozens of cloud backends
-rclone copy /opt/ghostberry/backups remote:ghostberry/ --include 'ghost_backup_*.tar.gz.enc'
-
-# rsync to another host
-rsync -avz /opt/ghostberry/backups/ user@nas.local:/backups/ghostberry/
+./scripts/offsite.sh status         # last successful upload, space used
+./scripts/offsite.sh list           # backups stored in R2
+./scripts/offsite.sh push           # upload the newest local backup now
+./scripts/offsite.sh pull latest    # download the newest into backups/
 ```
 
-Schedule this **after** the nightly backup completes (e.g. cron at 04:00).
+### Will 10 GB be enough?
+
+Each backup is roughly the size of your uploaded images plus a small database dump,
+and R2 keeps `OFFSITE_KEEP` of them. Check yours with `ls -lh backups/`.
+
+| Backup size | × 7 copies | Fits the free tier? |
+|---|---|---|
+| 100 MB | 0.7 GB | ✅ |
+| 500 MB | 3.5 GB | ✅ |
+| 1.5 GB | 10.5 GB | ⚠️ set `OFFSITE_KEEP=5`, or pay a few cents a month |
+
+Change it with `OFFSITE_KEEP=5 ./setup.sh`.
+
+### Protect against a hacked Pi (optional)
+
+The token can delete objects (pruning needs that), so someone who takes over the Pi
+could delete your off-site copies too. To prevent it, add a **bucket lock rule** in the
+R2 dashboard (bucket → **Settings** → **Bucket lock rules** → **Add rule**) with prefix `ghostberry/` and a
+retention period **comfortably shorter than `OFFSITE_KEEP` days**, e.g. 3 days with the default of 7.
+Locked objects can't be deleted or overwritten until the period ends.
+
+Pruning keeps the newest `OFFSITE_KEEP` backups by count, not by age. On a day with extra
+backups (an update, a manual run) it may try to delete a copy that is still locked. That
+only logs a warning (the upload itself still counts as successful), and the copy is
+removed on a later night once its lock has expired.
+
+### Other destinations
+
+Archives are encrypted, so you can also copy `backups/` anywhere yourself, e.g.
+`rsync -avz /opt/ghostberry/backups/ user@nas.local:/backups/ghostberry/` from cron
+after 03:17.
 
 ## Verifying a backup
 
@@ -110,20 +177,29 @@ tar tzf backups/ghost_backup_*.tar.gz >/dev/null && echo "✅ archive intact"
 
 ## Disaster recovery
 
-Lost the Pi entirely:
+Lost the Pi or its SD card:
 
-1. Flash 64-bit Raspberry Pi OS to a new SD card.
-2. Copy your most recent backup archive **and** your old `.env` file to the new box.
-3. Run the one-shot installer with the **same** `BACKUP_ENCRYPTION_KEY` as before (otherwise the encrypted archive can't be opened), e.g. `curl … | sudo GHOST_URL=… CLOUDFLARE_TUNNEL_TOKEN=… BACKUP_ENCRYPTION_KEY='<old key>' NONINTERACTIVE=1 bash`. If you already installed without it, set `BACKUP_ENCRYPTION_KEY` in `.env` to the old value instead.
-4. Drop the backup archive into `/opt/ghostberry/backups/`.
-5. `./scripts/restore.sh backups/<archive>`.
+1. Flash 64-bit Raspberry Pi OS to a new card and set up the Cloudflare Tunnel token as before.
+2. Run the installer with the **same** `BACKUP_ENCRYPTION_KEY` (otherwise the encrypted
+   archives can't be opened) and, if you used R2, the same R2 settings:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh \
+     | sudo GHOST_URL=… CLOUDFLARE_TUNNEL_TOKEN=… BACKUP_ENCRYPTION_KEY='<old key>' \
+            OFFSITE=r2 R2_ACCOUNT_ID=… R2_BUCKET=… R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… \
+            NONINTERACTIVE=1 bash
+   ```
+   (Already installed without them? Set the values in `.env` instead.)
+3. Get the archive back:
+   - from R2: `cd /opt/ghostberry && ./scripts/offsite.sh pull latest`
+   - from your own copy: put it in `/opt/ghostberry/backups/`
+4. `./scripts/restore.sh backups/<archive>`
 
-> ⚠️  **The encryption key is the single most important thing to back up out-of-band.** Without it, an encrypted archive is just noise. Save it in a password manager.
+> ⚠️  **The encryption key is the single most important thing to back up out-of-band.** Without it, an encrypted archive is just noise. Save it in a password manager, together with your R2 Access Key ID and Secret.
 
 ## Checklist
 
 - [ ] Cron is firing (`tail /var/log/ghostberry-backup.log`)
 - [ ] Disk has headroom (`df -h /opt/ghostberry`)
-- [ ] Off-site copy is running
+- [ ] Off-site copy is running (`./scripts/offsite.sh status`)
 - [ ] `BACKUP_ENCRYPTION_KEY` is stored outside the Pi
 - [ ] You've done one practice restore (do this once a quarter)
