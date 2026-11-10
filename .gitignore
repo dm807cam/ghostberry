@@ -61,3 +61,6 @@ __pycache__/
 *.crt
 *.p12
 *.pfx
+
+# Ghostberry runtime state
+.update-notified

@@ -1,6 +1,11 @@
+# Image versions are pinned exactly, here and only here (plus rclone in
+# scripts/offsite.sh). A Ghostberry release bumps them; re-running the
+# installer applies them. Override one in .env only if you must, e.g.
+# GHOST_IMAGE=ghost:6.80.0-alpine; an override is never updated for you.
+# GHOST_IMAGE_HOLD is set by setup.sh only to avoid a downgrade (see there).
 services:
   ghost:
-    image: ${GHOST_IMAGE:-ghost:6-alpine}
+    image: ${GHOST_IMAGE:-${GHOST_IMAGE_HOLD:-ghost:6.75.0-alpine}}
     container_name: ghost
     restart: unless-stopped
     environment:
@@ -16,6 +21,12 @@ services:
       # Behind Cloudflare Tunnel — trust forwarded headers for correct client IPs.
       server__host: 0.0.0.0
       server__port: 2368
+
+      # Update notices: Ghost's daily update check reads Ghostberry's feed
+      # (written to .env by setup.sh), which shows a banner in Ghost Admin
+      # when a newer Ghostberry release exists. UPDATE_NOTICES=off in .env
+      # restores Ghost's own feed.
+      updateCheck__url: ${UPDATE_CHECK_URL:-https://updates.ghost.org}
 
       # Mail (transactional: sign-in links, password resets, invites).
       # MAIL_HOST is either the built-in relay ("mail", see the mail service
@@ -69,7 +80,7 @@ services:
         max-file: "3"
 
   db:
-    image: ${MYSQL_IMAGE:-mysql:8.0}
+    image: ${MYSQL_IMAGE:-mysql:8.0.46}
     container_name: ghost_db
     restart: unless-stopped
     environment:
@@ -114,7 +125,7 @@ services:
         max-file: "3"
 
   cloudflared:
-    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.10.7}
     container_name: cloudflared
     restart: unless-stopped
     command: tunnel --no-autoupdate run

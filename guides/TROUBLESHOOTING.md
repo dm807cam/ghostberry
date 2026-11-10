@@ -132,12 +132,16 @@ docker stats --no-stream
 
 ## Updating
 
-```bash
-./scripts/update.sh      # backup → pull → recreate → wait for healthy
-```
+Re-run the install command (`curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash`).
+It backs up, updates and waits for Ghost to report healthy.
 
-If the update fails, the pre-update backup is the newest file in `backups/`:
-`./scripts/restore.sh backups/<file>`.
+| Problem | Fix |
+|---|---|
+| `Couldn't pull every image` | Network or Docker Hub rate limit. The stack keeps running on the old images; re-run the command later |
+| Ghost isn't healthy after the update | `docker compose logs --tail=100 ghost`. To go back, restore the pre-update backup (the newest file in `backups/`): `./scripts/restore.sh backups/<file>` |
+| No update banner in Ghost Admin | Ghost checks once a day at a random time, so it can take up to a day. `./scripts/check-update.sh` tells you right away whether a release is out |
+| No update email | Email must be set up (`MAIL_MODE`), and it's sent once per release: see `/var/log/ghostberry-update.log` |
+| An image doesn't change on updates | It's pinned in `.env` (`setup.sh` prints a note). Remove the line to follow releases again |
 
 ## Backups
 

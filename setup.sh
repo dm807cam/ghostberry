@@ -87,6 +87,7 @@ OVERRIDABLE=(
   MYSQL_BUFFER_POOL BACKUP_KEEP
   OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
   R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE
+  UPDATE_NOTICES GHOSTBERRY_FEED_URL
 )
 declare -A FROM_ENV=()
 for v in "${OVERRIDABLE[@]}"; do
@@ -313,14 +314,72 @@ case "${OFFSITE}" in
 esac
 : "${R2_JURISDICTION:=default}"
 
-# --- Image pins -----------------------------------------------------------
-# Ghost 5 no longer gets updates. Move installs that still use the old
-# default tag to Ghost 6 (Ghost's own upgrade path; update.sh / install.sh
-# take a backup first). An explicit pin such as ghost:5.130 is left alone.
-if [[ "${GHOST_IMAGE:-}" == "ghost:5-alpine" ]]; then
-  warn "Upgrading GHOST_IMAGE ghost:5-alpine → ghost:6-alpine (Ghost 5 is end-of-life)."
-  warn "Check your theme with https://gscan.ghost.org — Ghost 6 removed AMP and '?limit=all'."
-  GHOST_IMAGE=ghost:6-alpine
+# --- Image versions ---------------------------------------------------------
+# The exact versions live in docker-compose.yml (and scripts/offsite.sh for
+# rclone), so re-running the installer after a Ghostberry release moves
+# this Pi to them. .env only keeps a tag you set on purpose.
+#
+# Older setup.sh versions wrote their *defaults* into .env, which froze
+# those installs on them forever. Clear exactly those old defaults (unless
+# passed in explicitly this run) so the pinned versions apply again.
+for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+  [[ -n "${FROM_ENV[$v]:-}" ]] && continue
+  case "${!v:-}" in
+    ghost:5-alpine)
+      warn "Moving from Ghost 5 (end-of-life) to the Ghost 6 version this release pins."
+      warn "Check your theme with https://gscan.ghost.org: Ghost 6 removed AMP and '?limit=all'."
+      printf -v "${v}" '%s' "" ;;
+    ghost:6-alpine|mysql:8.0|cloudflare/cloudflared:latest|ghcr.io/foxcpp/maddy:0.9.7|rclone/rclone:1.76.0)
+      printf -v "${v}" '%s' "" ;;
+  esac
+done
+
+# Never downgrade Ghost: a Ghost older than the one that migrated the
+# database refuses to start (MIGRATION_STATE_ERROR). If the Ghost running
+# now is newer than this release pins (e.g. pulled via the old floating
+# ghost:6-alpine tag), hold it until a release pins that version or newer.
+pinned_ghost="$(sed -nE 's/.*GHOST_IMAGE_HOLD:-ghost:([0-9]+\.[0-9]+\.[0-9]+)-alpine.*/\1/p' docker-compose.yml | head -n 1)"
+running_ghost="$(docker exec ghost node -p 'require("/var/lib/ghost/current/package.json").version' 2>/dev/null || true)"
+semver_gt() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" == "$1" ]]; }
+: "${GHOST_IMAGE_HOLD:=}"
+if [[ -n "${GHOST_IMAGE:-}" || ! "${pinned_ghost}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  GHOST_IMAGE_HOLD=""                       # explicit override wins / can't tell
+elif [[ "${running_ghost}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && semver_gt "${running_ghost}" "${pinned_ghost}"; then
+  GHOST_IMAGE_HOLD="ghost:${running_ghost}-alpine"
+  warn "This Pi runs Ghost ${running_ghost}, newer than the ${pinned_ghost} this release pins."
+  warn "Keeping ${running_ghost} (Ghost can't be downgraded); a later release will move it on."
+elif [[ -n "${GHOST_IMAGE_HOLD}" ]]; then
+  held="${GHOST_IMAGE_HOLD#ghost:}"; held="${held%-alpine}"
+  if ! semver_gt "${held}" "${pinned_ghost}"; then
+    GHOST_IMAGE_HOLD=""                     # the release caught up: follow the pin again
+  fi
+fi
+
+# --- Ghostberry version & update notices ------------------------------------
+# Ghost's daily update check reads <feed>/v<this version>.json: it exists
+# only once a newer release is out, and then shows a banner in Ghost Admin.
+# scripts/check-update.sh reads <feed>/latest.json and emails the admins once.
+GHOSTBERRY_VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || true)"
+GHOSTBERRY_VERSION="${GHOSTBERRY_VERSION:-0.0.0}"
+: "${UPDATE_NOTICES:=on}"
+[[ "${UPDATE_NOTICES}" =~ ^(on|off)$ ]] || die "UPDATE_NOTICES must be on or off."
+feed_from_git_remote() {
+  # https://github.com/OWNER/REPO(.git) or git@github.com:OWNER/REPO(.git)
+  local url
+  url="$(git -C "${SCRIPT_DIR}" remote get-url origin 2>/dev/null || true)"
+  if [[ "${url}" =~ github\.com[:/]([^/]+)/([^/]+)$ ]]; then
+    local owner="${BASH_REMATCH[1]}" repo="${BASH_REMATCH[2]%.git}"
+    printf 'https://%s.github.io/%s/update-check' "${owner,,}" "${repo}"
+  else
+    printf 'https://dm807cam.github.io/ghostberry/update-check'
+  fi
+}
+UPDATE_FEED="${GHOSTBERRY_FEED_URL:-$(feed_from_git_remote)}"
+UPDATE_FEED="${UPDATE_FEED%/}"
+if [[ "${UPDATE_NOTICES}" == "on" ]]; then
+  UPDATE_CHECK_URL="${UPDATE_FEED}/v${GHOSTBERRY_VERSION}.json"
+else
+  UPDATE_CHECK_URL="https://updates.ghost.org"   # Ghost's own feed
 fi
 
 # --- Generate any still-missing secrets ----------------------------------
@@ -404,12 +463,19 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'R2_ACCESS_KEY_ID=%s\n'     "$(shq "${R2_ACCESS_KEY_ID}")"
   printf 'R2_SECRET_ACCESS_KEY=%s\n' "$(shq "${R2_SECRET_ACCESS_KEY}")"
   printf 'OFFSITE_KEEP=%s\n\n'        "$(shq "${OFFSITE_KEEP}")"
-  printf '# Image pins — leave at defaults unless overriding.\n'
-  printf 'GHOST_IMAGE=%s\n'        "$(shq "${GHOST_IMAGE:-ghost:6-alpine}")"
-  printf 'MYSQL_IMAGE=%s\n'        "$(shq "${MYSQL_IMAGE:-mysql:8.0}")"
-  printf 'CLOUDFLARED_IMAGE=%s\n'  "$(shq "${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}")"
-  printf 'MAIL_IMAGE=%s\n'         "$(shq "${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.7}")"
-  printf 'RCLONE_IMAGE=%s\n\n'     "$(shq "${RCLONE_IMAGE:-rclone/rclone:1.76.0}")"
+  printf '# Ghostberry version and update notices (written by setup.sh).\n'
+  printf 'GHOSTBERRY_VERSION=%s\n'   "$(shq "${GHOSTBERRY_VERSION}")"
+  printf 'UPDATE_NOTICES=%s\n'       "$(shq "${UPDATE_NOTICES}")"
+  printf 'UPDATE_FEED=%s\n'          "$(shq "${UPDATE_FEED}")"
+  printf 'UPDATE_CHECK_URL=%s\n'     "$(shq "${UPDATE_CHECK_URL}")"
+  [[ -n "${GHOSTBERRY_FEED_URL:-}" ]] && printf 'GHOSTBERRY_FEED_URL=%s\n' "$(shq "${GHOSTBERRY_FEED_URL}")"
+  [[ -n "${GHOST_IMAGE_HOLD}" ]] && printf '# Set by setup.sh to avoid downgrading Ghost; cleared automatically.\nGHOST_IMAGE_HOLD=%s\n' "$(shq "${GHOST_IMAGE_HOLD}")"
+  printf '\n# Image overrides. Empty = the version this Ghostberry release pins\n'
+  printf '# (docker-compose.yml). A tag set here is never updated for you.\n'
+  for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+    if [[ -n "${!v:-}" ]]; then printf '%s=%s\n' "${v}" "$(shq "${!v}")"; else printf '# %s=\n' "${v}"; fi
+  done
+  printf '\n'
   printf '# Resource caps (override on low-memory Pis).\n'
   printf 'GHOST_MEM_LIMIT=%s\n'        "$(shq "${GHOST_MEM_LIMIT:-768m}")"
   printf 'DB_MEM_LIMIT=%s\n'           "$(shq "${DB_MEM_LIMIT:-512m}")"
@@ -435,7 +501,10 @@ if [[ "${MAIL_MODE}" != "builtin" ]] && command -v docker >/dev/null 2>&1 \
 fi
 
 echo "✅ .env written ($(stat -c%a .env 2>/dev/null || stat -f%Lp .env) perms)"
-echo "   GHOST_URL=${GHOST_URL}"
+echo "   Ghostberry ${GHOSTBERRY_VERSION} · GHOST_URL=${GHOST_URL}"
+for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+  [[ -n "${!v:-}" ]] && echo "   Note: ${v}=${!v} is pinned in .env and won't follow Ghostberry releases."
+done
 case "${MAIL_MODE}" in
   builtin)
     if [[ -n "${MAIL_RELAY_HOST}" ]]; then
