@@ -1,5 +1,6 @@
 # Image versions are pinned exactly, here and only here (plus rclone in
-# scripts/offsite.sh). A Ghostberry release bumps them; re-running the
+# scripts/offsite.sh; .env.example repeats them as commented examples, so
+# bump those too). A Ghostberry release bumps them; re-running the
 # installer applies them. Override one in .env only if you must, e.g.
 # GHOST_IMAGE=ghost:6.80.0-alpine; an override is never updated for you.
 # GHOST_IMAGE_HOLD is set by setup.sh only to avoid a downgrade (see there).

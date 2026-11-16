@@ -20,6 +20,11 @@ fixes, minor = new features, major = changes that need manual steps.
 Security update. Re-run the install command to get it; your blog is backed up
 first, as always.
 
+If you set `GHOST_IMAGE` or `CLOUDFLARED_IMAGE` in `.env` yourself, those lines
+win over this release and are not updated: delete them, then re-run the install
+command. The installer now warns when such a line is older than the release's
+version.
+
 ### Security
 - **Ghost 6.75.0 → 6.77.0.** Fixes eleven Ghost security advisories published
   on 13 November 2026, including a high-severity bypass of Ghost's sign-in

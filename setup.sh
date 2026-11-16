@@ -505,6 +505,18 @@ echo "   Ghostberry ${GHOSTBERRY_VERSION} · GHOST_URL=${GHOST_URL}"
 for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
   [[ -n "${!v:-}" ]] && echo "   Note: ${v}=${!v} is pinned in .env and won't follow Ghostberry releases."
 done
+# An override older than this release's pin misses its (security) fixes.
+warn_if_older() {  # <var> <override's version> <pinned version>
+  [[ "$2" =~ ^[0-9]+(\.[0-9]+)+$ && "$3" =~ ^[0-9]+(\.[0-9]+)+$ ]] || return 0
+  semver_gt "$3" "$2" || return 0
+  warn "$1=${!1} in .env is older than the $3 this release pins, so it misses that"
+  warn "release's fixes (see CHANGELOG.md). Delete the $1 line from .env and re-run to follow releases."
+}
+pinned_cloudflared="$(sed -nE 's|.*CLOUDFLARED_IMAGE:-cloudflare/cloudflared:([0-9.]+)\}.*|\1|p' docker-compose.yml | head -n 1)"
+override="${GHOST_IMAGE:-}"; override="${override#ghost:}"
+warn_if_older GHOST_IMAGE "${override%-alpine}" "${pinned_ghost}"
+override="${CLOUDFLARED_IMAGE:-}"
+warn_if_older CLOUDFLARED_IMAGE "${override#cloudflare/cloudflared:}" "${pinned_cloudflared}"
 case "${MAIL_MODE}" in
   builtin)
     if [[ -n "${MAIL_RELAY_HOST}" ]]; then
