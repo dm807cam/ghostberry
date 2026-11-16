@@ -15,6 +15,38 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.0.1] - 2026-11-16
+
+Security update. Re-run the install command to get it; your blog is backed up
+first, as always.
+
+If you set `GHOST_IMAGE` or `CLOUDFLARED_IMAGE` in `.env` yourself, those lines
+win over this release and are not updated: delete them, then re-run the install
+command. The installer now warns when such a line is older than the release's
+version.
+
+### Security
+- **Ghost 6.75.0 → 6.77.0.** Fixes eleven Ghost security advisories published
+  on 13 November 2026, including a high-severity bypass of Ghost's sign-in
+  brute-force protection
+  ([GHSA-fxxr-gqx3-p253](https://github.com/TryGhost/Ghost/security/advisories/GHSA-fxxr-gqx3-p253)),
+  members-only content exposed through the Content API
+  ([GHSA-994c-84qf-j7q9](https://github.com/TryGhost/Ghost/security/advisories/GHSA-994c-84qf-j7q9)),
+  deleted or hidden comments readable through the comments API
+  ([GHSA-9c5c-w94h-xp32](https://github.com/TryGhost/Ghost/security/advisories/GHSA-9c5c-w94h-xp32)),
+  revenue numbers visible to all staff
+  ([GHSA-vh3j-4gg7-7vjw](https://github.com/TryGhost/Ghost/security/advisories/GHSA-vh3j-4gg7-7vjw)),
+  and brute-forcing of a private site's access code
+  ([GHSA-q58f-57cg-xfw5](https://github.com/TryGhost/Ghost/security/advisories/GHSA-q58f-57cg-xfw5)).
+  If your site is private, visitors enter the access code once more after
+  the update. Full list:
+  [Ghost security advisories](https://github.com/TryGhost/Ghost/security/advisories).
+  Release notes: [6.76.0](https://github.com/TryGhost/Ghost/releases/tag/v6.76.0),
+  [6.77.0](https://github.com/TryGhost/Ghost/releases/tag/v6.77.0).
+- **cloudflared 2026.10.7 → 2026.11.0.** Fixes a way to slip past Cloudflare
+  Access with crafted URL parameters, and moves to Go 1.27.4
+  ([release notes](https://github.com/cloudflare/cloudflared/blob/2026.11.0/RELEASE_NOTES)).
+
 ## [1.0.0] - 2026-11-10
 
 First versioned release.
