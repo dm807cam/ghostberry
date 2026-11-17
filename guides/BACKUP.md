@@ -146,8 +146,9 @@ Change it with `OFFSITE_KEEP=5 ./setup.sh`.
 
 The token can delete objects (pruning needs that), so someone who takes over the Pi
 could delete your off-site copies too. To prevent it, add a **bucket lock rule** in the
-R2 dashboard (bucket → **Settings** → **Bucket lock rules** → **Add rule**) with prefix `ghostberry/` and a
-retention period **comfortably shorter than `OFFSITE_KEEP` days**, e.g. 3 days with the default of 7.
+R2 dashboard (bucket → **Settings** → **Bucket lock rules** → **Add rule**): give it a name, prefix `ghostberry/` and a
+retention period **comfortably shorter than the span of nightly backups R2 keeps** (`OFFSITE_KEEP`
+backups, one per night), e.g. 3 days with the default of 7, then **Save changes**.
 Locked objects can't be deleted or overwritten until the period ends.
 
 Pruning keeps the newest `OFFSITE_KEEP` backups by count, not by age. On a day with extra

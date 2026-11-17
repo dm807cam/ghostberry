@@ -15,6 +15,21 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.0.2] - 2026-11-17
+
+Documentation fixes only: your blog and its containers stay the same. Updating
+is optional; re-running the install command takes a backup and restarts Ghost
+for a minute, so pick a quiet moment, or wait for the next release.
+
+### Fixed
+- **Troubleshooting guide:** the tunnel token is under **Networking → Tunnels**
+  in the main Cloudflare dashboard, not under Zero Trust. The README and
+  website already said this
+  ([Cloudflare docs](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)).
+- **Backup guide:** a bucket lock rule now also needs a name, and you finish
+  with **Save changes**
+  ([Cloudflare docs](https://developers.cloudflare.com/r2/buckets/bucket-locks/)).
+
 ## [1.0.1] - 2026-11-16
 
 Security update. Re-run the install command to get it; your blog is backed up
