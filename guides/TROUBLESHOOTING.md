@@ -43,8 +43,9 @@ docker compose exec ghost wget -qO- --header='X-Forwarded-Proto: https' \
 docker compose logs --tail=30 cloudflared
 ```
 
-- `Unauthorized` / `invalid token`: re-copy the token from the Cloudflare
-  dashboard → Networking → Tunnels (Docker command, after `--token`), then `CLOUDFLARE_TUNNEL_TOKEN=eyJ… ./setup.sh && docker compose up -d`.
+- `Unauthorized` / `invalid token`: re-copy the token: in the [Cloudflare
+  dashboard](https://dash.cloudflare.com/?to=/:account/tunnels) go to Networking → Tunnels, open your
+  `ghostberry` tunnel and copy it from the Docker command (after `--token`), then `CLOUDFLARE_TUNNEL_TOKEN=eyJ… ./setup.sh && docker compose up -d`.
 - Tunnel is healthy but the site shows **502**: the published application
   route's service URL must be exactly `http://ghost:2368`.
 - **Redirect loop / "too many redirects"**: `GHOST_URL` must be `https://…`

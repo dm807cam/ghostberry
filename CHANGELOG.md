@@ -17,8 +17,9 @@ fixes, minor = new features, major = changes that need manual steps.
 
 ## [1.0.2] - 2026-11-17
 
-Documentation fixes only: nothing on your Pi changes. Re-run the install
-command whenever it suits you.
+Documentation fixes only: your blog and its containers stay the same. Updating
+is optional; re-running the install command takes a backup and restarts Ghost
+for a minute, so pick a quiet moment, or wait for the next release.
 
 ### Fixed
 - **Troubleshooting guide:** the tunnel token is under **Networking → Tunnels**
