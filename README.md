@@ -175,8 +175,17 @@ Images are optional everywhere.
   `./scripts/theme.sh activate`.
 - **Settings** (Ghost Admin → Settings → Design → Customize): colour scheme
   (Auto follows the reader's device, or force Light or Dark), post thumbnails
-  on the home page, and the table of contents. The accent colour and the
-  heading and body fonts follow Ghost's own Brand and Typography settings.
+  on the home page, the table of contents, and the author line under posts.
+  The accent colour and the heading and body fonts follow Ghost's own Brand
+  and Typography settings.
+- **Ghost's features are covered**: members (subscribe, sign-in, members-only
+  and paid posts are marked in lists), comments, search, recommendations, the
+  announcement bar, author pages with social links, tag images, featured
+  posts, and every card in the editor, in light and dark.
+- **English and German** text is built in and follows the publication language
+  set in Ghost. Add a language by copying `locales/en.json`.
+- **A "Plain" post template** (Post settings → Template) shows only the title
+  and text.
 - **No third-party requests.** Fonts (Fraunces, Source Serif 4, Inter; SIL Open
   Font License) are served from your Pi.
 - **Updates replace it.** Each Ghostberry update re-installs the theme, so

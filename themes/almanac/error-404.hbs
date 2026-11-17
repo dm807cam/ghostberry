@@ -1,7 +1,7 @@
 {{!< default}}
 
 <header class="archive-head">
-    <p class="label">Error {{statusCode}}</p>
-    <h1 class="archive-title">This page isn&rsquo;t here</h1>
-    <p class="archive-desc">It may have moved, or the link may be mistyped. <a href="{{@site.url}}">Back to all writing</a>.</p>
+    <p class="label">{{t "Error {code}" code=statusCode}}</p>
+    <h1 class="archive-title">{{t "This page isn’t here"}}</h1>
+    <p class="archive-desc">{{t "It may have moved, or the link may be mistyped."}} <a href="{{@site.url}}">{{t "Back to all writing"}}</a>.</p>
 </header>

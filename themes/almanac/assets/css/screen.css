@@ -205,6 +205,8 @@ p { margin: 0; text-wrap: pretty; }
 .label { font-weight: 600; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .meta-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); }
+/* No reading time (a post the visitor can't read): drop the item and its dot. */
+.meta span:empty:not(.meta-dot), .meta-dot:has(+ span:empty:not(.meta-dot)) { display: none; }
 .meta-tag { color: var(--accent); }
 
 /* 4. Shell and rail */
@@ -688,9 +690,13 @@ form.success .field { display: none; }
 
 .content iframe, .content video { max-width: 100%; }
 
-/* Ghost's own frames (comments, search, portal) are light documents; without
-   this a dark page gives them an opaque white backdrop. */
-iframe { color-scheme: light; }
+/* Ghost's own frames (comments, search, portal) are light documents with a
+   see-through background; on a dark page the browser would otherwise paint
+   them white. Other embeds keep that protection. */
+.comments iframe,
+#ghost-comments-root iframe,
+#ghost-portal-root iframe,
+#sodo-search-root iframe { color-scheme: light; }
 
 /* 8. Ghost editor cards */
 
@@ -760,15 +766,35 @@ iframe { color-scheme: light; }
 .content .kg-toggle-card .kg-toggle-content p { font-size: 18px; line-height: 28px; }
 
 .content .kg-header-card, .content .kg-signup-card, .content .kg-cta-card { border-radius: 8px; overflow: hidden; }
-.content .kg-audio-card, .content .kg-file-card a.kg-file-card-container, .content .kg-video-card .kg-video-container { border-radius: 8px; }
-.content .kg-audio-card, .content .kg-file-card a.kg-file-card-container {
-    box-shadow: none;
+/* Ghost draws these three as white boxes with dark text; give them the
+   theme's own surface so they also work on a dark page. */
+.content .kg-audio-card,
+.content .kg-file-card a.kg-file-card-container,
+.content .kg-product-card .kg-product-card-container {
+    background: var(--field);
+    color: var(--ink);
     border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: none;
     font-family: var(--font-ui);
+    text-decoration: none;
 }
-.content .kg-file-card a.kg-file-card-container { text-decoration: none; }
+.content .kg-video-card .kg-video-container { border-radius: 8px; }
+.content .kg-audio-card .kg-audio-title, .content .kg-file-card .kg-file-card-title { color: var(--ink); font-weight: 600; }
+.content .kg-audio-card .kg-audio-time,
+.content .kg-file-card .kg-file-card-caption,
+.content .kg-file-card .kg-file-card-metadata,
+.content .kg-file-card .kg-file-card-filesize { color: var(--muted); }
+.content .kg-audio-card .kg-audio-thumbnail.placeholder { background: var(--accent); }
+.content .kg-audio-card .kg-audio-thumbnail.placeholder svg { fill: var(--bg); }
+.content .kg-file-card .kg-file-card-icon svg { color: var(--accent); }
+.content .kg-product-card .kg-product-card-title { font-family: var(--font-display); font-size: 21px; line-height: 28px; font-weight: 400; color: var(--ink); margin: 0; }
+.content .kg-product-card .kg-product-card-description, .content .kg-product-card .kg-product-card-description p { font-size: 15px; line-height: 24px; color: var(--soft); }
+.content .kg-product-card a.kg-product-card-btn-accent { background: var(--accent); color: var(--bg); border-radius: 8px; text-decoration: none; }
+.content .kg-product-card .kg-product-card-image { border-radius: 4px; }
+.content .kg-toggle-card .kg-toggle-content, .content .kg-toggle-card .kg-toggle-content p { color: var(--body); }
+.content .kg-toggle-card .kg-toggle-heading svg { color: var(--muted); }
 .content .kg-gallery-image img { border-radius: 4px; }
-.content .kg-product-card .kg-product-card-container { border-radius: 8px; box-shadow: none; border: 1px solid var(--line); }
 
 /* Members-only cut-off. */
 .content .gh-post-upgrade-cta { font-family: var(--font-ui); }
@@ -812,6 +838,72 @@ iframe { color-scheme: light; }
 }
 .foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .foot a:hover { color: var(--ink); }
+
+/* Access marker, author, archive extras, recommendations */
+
+.meta-access { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+
+.byline {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 32px;
+}
+.byline-author { display: flex; align-items: center; gap: 12px; }
+.byline-author:hover { text-decoration: none; }
+.byline-author:hover .byline-name { color: var(--accent); }
+.byline-author img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.byline-text { display: flex; flex-direction: column; gap: 4px; }
+.byline-name { font-family: var(--font-display); font-size: 19px; line-height: 24px; letter-spacing: -0.01em; }
+
+.archive-avatar { width: 72px; height: 72px; margin-bottom: 12px; border-radius: 50%; object-fit: cover; }
+.archive-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--muted);
+}
+.archive-links a { color: var(--ink); font-weight: 500; }
+.archive-image {
+    margin-top: 12px;
+    width: 100%;
+    aspect-ratio: 5 / 2;
+    object-fit: cover;
+    border-radius: 6px;
+    outline: 1px solid var(--image-edge);
+    outline-offset: -1px;
+}
+
+.recs { margin-top: 64px; }
+.recs .label { margin-bottom: 16px; }
+.recommendations { list-style: none; margin: 0; padding: 0; }
+.recommendation { border-top: 1px solid var(--line); }
+.recommendation a { padding: 16px 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.recommendation a:hover { text-decoration: none; }
+.recommendation a:hover .recommendation-title { color: var(--accent); }
+.recommendation-favicon { align-self: center; }
+.recommendation-favicon:not(:has(img)) { display: none; }
+.recommendation-favicon img { width: 16px; height: 16px; border-radius: 3px; }
+.recommendation-title { color: var(--accent); }
+.recommendation-favicon { align-self: center; }
+.recommendation-favicon:empty { display: none; }
+.recommendation-favicon img { width: 16px; height: 16px; border-radius: 3px; }
+.recommendation-title {
+    flex: 1;
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+.recommendation-url { font-family: var(--font-ui); font-size: 13px; line-height: 20px; color: var(--muted); }
+.recommendation-description { flex-basis: 100%; font-size: 16px; line-height: 25px; color: var(--soft); }
 
 /* Two columns: let wide cards use the room to the right. */
 @media (min-width: 1024px) {
@@ -939,6 +1031,8 @@ iframe { color-scheme: light; }
     .content .footnotes { font-size: 15px; line-height: 24px; }
 
     .filed { margin-top: 24px; }
+    .byline { margin-top: 24px; padding-top: 20px; }
+    .recs { margin-top: 48px; }
     .subscribe-phone { display: block; }
     .subscribe { margin-top: 48px; padding: 24px; }
     .subscribe-title { font-size: 22px; line-height: 28px; }

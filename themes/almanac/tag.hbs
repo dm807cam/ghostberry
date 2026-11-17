@@ -2,10 +2,17 @@
 
 {{#tag}}
 <header class="archive-head">
-    <p class="label">Filed under</p>
+    <p class="label">{{t "Filed under"}}</p>
     <h1 class="archive-title">{{name}}</h1>
     {{#if description}}
         <p class="archive-desc">{{description}}</p>
+    {{/if}}
+    {{#if feature_image}}
+        <img class="archive-image"
+            srcset="{{img_url feature_image size="s"}} 400w, {{img_url feature_image size="m"}} 720w, {{img_url feature_image size="l"}} 1280w"
+            sizes="(min-width: 1024px) 640px, calc(100vw - 40px)"
+            src="{{img_url feature_image size="m"}}"
+            alt="">
     {{/if}}
 </header>
 {{/tag}}

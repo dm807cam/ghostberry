@@ -12,7 +12,7 @@
     {{ghost_head}}
 </head>
 <body class="{{body_class}}">
-<a class="skip-link" href="#main">Skip to content</a>
+<a class="skip-link" href="#main">{{t "Skip to content"}}</a>
 
 <div class="shell">
     {{> "rail"}}
@@ -27,12 +27,14 @@
             {{#if @site.secondary_navigation}}
                 {{#foreach @site.secondary_navigation}}<a href="{{url absolute="true"}}">{{label}}</a>{{/foreach}}
             {{/if}}
+            {{#if @site.facebook}}<a href="{{social_url type="facebook"}}" rel="me noopener">Facebook</a>{{/if}}
+            {{#if @site.twitter}}<a href="{{social_url type="twitter"}}" rel="me noopener">X</a>{{/if}}
             <a href="{{@site.url}}/rss/">RSS</a>
             {{#if @site.members_enabled}}
                 {{#if @member}}
-                    <a href="#/portal/account" data-portal="account">Account</a>
+                    <a href="#/portal/account" data-portal="account">{{t "Account"}}</a>
                 {{else}}
-                    <a href="#/portal/signin" data-portal="signin">Sign in</a>
+                    <a href="#/portal/signin" data-portal="signin">{{t "Sign in"}}</a>
                 {{/if}}
             {{/if}}
         </span>

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "engines": {
-    "ghost": ">=5.0.0"
+    "ghost": ">=6.0.0"
   },
   "author": {
     "name": "Ghostberry",
@@ -19,17 +19,31 @@
   "config": {
     "posts_per_page": 6,
     "image_sizes": {
-      "xs": { "width": 200 },
-      "s": { "width": 400 },
-      "m": { "width": 720 },
-      "l": { "width": 1280 },
-      "xl": { "width": 2000 }
+      "xs": {
+        "width": 200
+      },
+      "s": {
+        "width": 400
+      },
+      "m": {
+        "width": 720
+      },
+      "l": {
+        "width": 1280
+      },
+      "xl": {
+        "width": 2000
+      }
     },
     "card_assets": true,
     "custom": {
       "color_scheme": {
         "type": "select",
-        "options": ["Auto", "Light", "Dark"],
+        "options": [
+          "Auto",
+          "Light",
+          "Dark"
+        ],
         "default": "Auto"
       },
       "show_post_thumbnails": {
@@ -38,6 +52,11 @@
         "group": "homepage"
       },
       "show_table_of_contents": {
+        "type": "boolean",
+        "default": true,
+        "group": "post"
+      },
+      "show_author": {
         "type": "boolean",
         "default": true,
         "group": "post"

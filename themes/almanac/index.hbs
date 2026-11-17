@@ -5,7 +5,7 @@
         {{#if @first}}
             {{#is "home"}}
                 {{> "post-feature"}}
-                {{#unless @last}}<h2 class="label feed-label">Earlier</h2>{{/unless}}
+                {{#unless @last}}<h2 class="label feed-label">{{t "Earlier"}}</h2>{{/unless}}
             {{else}}
                 {{> "post-row"}}
             {{/is}}
@@ -21,3 +21,12 @@
 <div class="subscribe-phone">
     {{> "subscribe"}}
 </div>
+
+{{#is "home"}}
+    {{#if @site.recommendations_enabled}}
+        <section class="recs">
+            <h2 class="label">{{t "Recommended"}}</h2>
+            {{recommendations}}
+        </section>
+    {{/if}}
+{{/is}}

@@ -1,0 +1,15 @@
+{{#if @custom.show_author}}
+    <div class="byline">
+        {{#foreach authors}}
+            <a class="byline-author" href="{{url}}">
+                {{#if profile_image}}
+                    <img src="{{img_url profile_image size="xs"}}" alt="" width="44" height="44" loading="lazy">
+                {{/if}}
+                <span class="byline-text">
+                    <span class="label">{{t "Written by"}}</span>
+                    <span class="byline-name">{{name}}</span>
+                </span>
+            </a>
+        {{/foreach}}
+    </div>
+{{/if}}

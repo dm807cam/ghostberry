@@ -26,6 +26,10 @@ your blog is backed up first, as always, and **keeps the theme it has now**.
   contents on posts; light and dark mode; phone layout. Fonts are served from
   your Pi, so pages make no third-party requests. It passes Ghost's theme
   checker for Ghost 6 with no warnings.
+- **Almanac covers Ghost's features:** members, comments, search,
+  recommendations, the announcement bar, author pages, tag images, featured
+  and members-only markers, and every editor card in light and dark. Its text
+  comes in English and German, following the publication language.
 - **A new blog starts on Almanac.** The installer switches to it only while
   nobody has signed up to Ghost Admin yet (`GHOSTBERRY_THEME=keep` leaves
   Ghost's default). On an existing blog it is installed but not switched on:
