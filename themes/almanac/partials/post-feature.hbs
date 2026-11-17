@@ -11,5 +11,5 @@
     {{/if}}
     {{> "post-meta" show_reading_time=true}}
     <h2 class="feature-title"><a href="{{url}}">{{title}}</a></h2>
-    <p class="feature-excerpt">{{#if custom_excerpt}}{{custom_excerpt}}{{else}}{{excerpt words="40"}}&hellip;{{/if}}</p>
+    <p class="feature-excerpt{{#unless custom_excerpt}} is-clamped{{/unless}}">{{#if custom_excerpt}}{{custom_excerpt}}{{else}}{{excerpt words="70"}}{{/if}}</p>
 </article>

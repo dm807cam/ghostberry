@@ -1,5 +1,7 @@
 {{!< default}}
 
+<h1 class="visually-hidden">{{@site.title}}</h1>
+
 <div class="feed">
     {{#foreach posts}}
         {{#if @first}}
@@ -12,6 +14,8 @@
         {{else}}
             {{> "post-row"}}
         {{/if}}
+    {{else}}
+        <p class="empty">{{t "Nothing here yet."}}</p>
     {{/foreach}}
 </div>
 

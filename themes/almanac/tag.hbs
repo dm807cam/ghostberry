@@ -20,6 +20,8 @@
 <div class="feed">
     {{#foreach posts}}
         {{> "post-row"}}
+    {{else}}
+        <p class="empty">{{t "Nothing here yet."}}</p>
     {{/foreach}}
 </div>
 

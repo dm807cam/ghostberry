@@ -2,7 +2,7 @@
     <div class="row-text">
         {{> "post-meta"}}
         <h2 class="row-title"><a href="{{url}}">{{title}}</a></h2>
-        <p class="row-excerpt">{{#if custom_excerpt}}{{custom_excerpt}}{{else}}{{excerpt words="22"}}&hellip;{{/if}}</p>
+        <p class="row-excerpt{{#unless custom_excerpt}} is-clamped{{/unless}}">{{#if custom_excerpt}}{{custom_excerpt}}{{else}}{{excerpt words="45"}}{{/if}}</p>
     </div>
     {{#if @custom.show_post_thumbnails}}
         {{#if feature_image}}

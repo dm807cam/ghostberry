@@ -177,6 +177,9 @@ p { margin: 0; text-wrap: pretty; }
 
 ::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.empty { font-size: 20px; line-height: 32px; color: var(--soft); }
+
 .skip-link {
     position: absolute;
     left: 16px;
@@ -420,6 +423,12 @@ form.success .field { display: none; }
     letter-spacing: -0.015em;
 }
 .row-excerpt { font-size: 18px; line-height: 28px; color: var(--soft); }
+/* Generated excerpts are cut to a few lines; the ellipsis appears only when
+   text is actually cut. Posts with no text show no excerpt at all. */
+.feature-excerpt.is-clamped, .row-excerpt.is-clamped { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.feature-excerpt.is-clamped { -webkit-line-clamp: 3; line-clamp: 3; }
+.row-excerpt.is-clamped { -webkit-line-clamp: 2; line-clamp: 2; }
+.feature-excerpt:empty, .row-excerpt:empty { display: none; }
 .row-thumb { flex: 0 0 96px; margin-top: 4px; }
 .row-thumb img {
     width: 96px;
@@ -495,7 +504,7 @@ form.success .field { display: none; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 32px;
 }
-.adjacent:empty { display: none; }
+.adjacent:not(:has(a)) { display: none; }
 .adjacent-link { display: flex; flex-direction: column; gap: 8px; }
 .adjacent-link:hover { text-decoration: none; }
 .adjacent-link:hover .adjacent-title { color: var(--accent); }
@@ -890,9 +899,6 @@ form.success .field { display: none; }
 .recommendation-favicon:not(:has(img)) { display: none; }
 .recommendation-favicon img { width: 16px; height: 16px; border-radius: 3px; }
 .recommendation-title { color: var(--accent); }
-.recommendation-favicon { align-self: center; }
-.recommendation-favicon:empty { display: none; }
-.recommendation-favicon img { width: 16px; height: 16px; border-radius: 3px; }
 .recommendation-title {
     flex: 1;
     margin: 0;

@@ -168,8 +168,8 @@ reading column. Posts get a table of contents built from their headings.
 Images are optional everywhere.
 
 - **A new blog starts on Almanac.** The installer switches to it only while
-  nobody has signed up to Ghost Admin yet. Prefer Ghost's default? Install with
-  `GHOSTBERRY_THEME=keep`.
+  nobody has signed up to Ghost Admin yet, and sets the accent colour to
+  Almanac's green. Prefer Ghost's default? Install with `GHOSTBERRY_THEME=keep`.
 - **An existing blog keeps its theme.** Almanac is installed next to it: pick it
   under **Ghost Admin → Settings → Design → Change theme → Installed**, or run
   `./scripts/theme.sh activate`.

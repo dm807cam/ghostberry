@@ -29,9 +29,7 @@
             {{/if}}
         </span>
         <span class="foot-links">
-            {{#if @site.secondary_navigation}}
-                {{#foreach @site.secondary_navigation}}<a href="{{url absolute="true"}}">{{label}}</a>{{/foreach}}
-            {{/if}}
+            {{navigation type="secondary"}}
             {{#if @site.facebook}}<a href="{{social_url type="facebook"}}" rel="me noopener">Facebook</a>{{/if}}
             {{#if @site.twitter}}<a href="{{social_url type="twitter"}}" rel="me noopener">X</a>{{/if}}
             <a href="{{@site.url}}/rss/">RSS</a>

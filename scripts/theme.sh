@@ -88,23 +88,31 @@ case "${1:-}" in
     fi
     if [[ "${2:-}" == "--if-new" ]]; then
       # Never change the look of a blog somebody already runs: only act
-      # while Ghost is still waiting for its first sign-up (no active
-      # staff user) and still on the theme it came with.
-      staff="$(sql "SELECT COUNT(*) FROM users WHERE status='active'" 2>/dev/null || echo 1)"
+      # while Ghost is still waiting for its first sign-up and still on the
+      # theme it came with. Before setup the one staff account is Ghost's
+      # placeholder, with status "inactive"; any other status (active,
+      # locked, warned) means a person has owned this blog.
+      staff="$(sql "SELECT COUNT(*) FROM users WHERE status <> 'inactive'" 2>/dev/null || echo 1)"
       if [[ "${staff}" != "0" || ! "${active}" =~ ^(source|casper)$ ]]; then
         exit 0
       fi
+      NEW_BLOG=1
     fi
     if [[ "${active}" == "${THEME}" ]]; then
       echo "Almanac is already the active theme."; exit 0
     fi
     install_theme >/dev/null
-    # Ghost reads the active theme from its settings when it starts. The
-    # accent colour is only changed while it is still Ghost's default pink.
-    sql "UPDATE settings SET value='${THEME}' WHERE \`key\`='active_theme';
-         UPDATE settings SET value='${ACCENT}' WHERE \`key\`='accent_color' AND value='${GHOST_DEFAULT_ACCENT}';"
+    # Ghost reads the active theme from its settings when it starts.
+    sql "UPDATE settings SET value='${THEME}' WHERE \`key\`='active_theme';"
+    # A brand-new blog also gets Almanac's green in place of Ghost's default
+    # pink accent. A blog somebody runs keeps the colour it has.
+    if [[ "${NEW_BLOG:-0}" == "1" ]]; then
+      sql "UPDATE settings SET value='${ACCENT}' WHERE \`key\`='accent_color' AND value='${GHOST_DEFAULT_ACCENT}';"
+    fi
     echo "▶ Restarting Ghost with the Almanac theme"
-    compose restart ghost >/dev/null
+    # restart reloads a running Ghost; up -d covers a stopped or removed one.
+    compose restart ghost >/dev/null 2>&1 || true
+    compose up -d ghost >/dev/null
     if wait_healthy; then
       echo "✅ Almanac is the active theme."
     else
