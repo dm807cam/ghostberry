@@ -1,0 +1,37 @@
+{{!< default}}
+
+{{#author}}
+<header class="archive-head">
+    {{#if profile_image}}
+        <img class="archive-avatar" src="{{img_url profile_image size="xs"}}" alt="" width="72" height="72">
+    {{/if}}
+    <p class="label">{{t "Written by"}}</p>
+    <h1 class="archive-title">{{name}}</h1>
+    {{#if bio}}
+        <p class="archive-desc">{{bio}}</p>
+    {{/if}}
+    <p class="archive-links">
+        {{#if location}}<span>{{location}}</span>{{/if}}
+        {{#if website}}<a href="{{website}}" rel="me noopener">{{t "Website"}}</a>{{/if}}
+            {{#if twitter}}<a href="{{social_url type="twitter"}}" rel="me noopener">X</a>{{/if}}
+            {{#if facebook}}<a href="{{social_url type="facebook"}}" rel="me noopener">Facebook</a>{{/if}}
+            {{#if threads}}<a href="{{social_url type="threads"}}" rel="me noopener">Threads</a>{{/if}}
+            {{#if bluesky}}<a href="{{social_url type="bluesky"}}" rel="me noopener">Bluesky</a>{{/if}}
+            {{#if mastodon}}<a href="{{social_url type="mastodon"}}" rel="me noopener">Mastodon</a>{{/if}}
+            {{#if instagram}}<a href="{{social_url type="instagram"}}" rel="me noopener">Instagram</a>{{/if}}
+            {{#if linkedin}}<a href="{{social_url type="linkedin"}}" rel="me noopener">LinkedIn</a>{{/if}}
+            {{#if youtube}}<a href="{{social_url type="youtube"}}" rel="me noopener">YouTube</a>{{/if}}
+            {{#if tiktok}}<a href="{{social_url type="tiktok"}}" rel="me noopener">TikTok</a>{{/if}}
+    </p>
+</header>
+{{/author}}
+
+<div class="feed">
+    {{#foreach posts}}
+        {{> "post-row"}}
+    {{else}}
+        <p class="empty">{{t "Nothing here yet."}}</p>
+    {{/foreach}}
+</div>
+
+{{pagination}}

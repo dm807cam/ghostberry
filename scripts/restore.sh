@@ -122,6 +122,10 @@ if [[ -f "${WORK}/mail.tar.gz" ]]; then
     '
 fi
 
+# A backup from before Ghostberry 1.1 has no Almanac theme in it.
+"${SCRIPT_DIR}/theme.sh" install >/dev/null 2>&1 \
+  || echo "⚠️  Couldn't re-install the Almanac theme; run ./scripts/theme.sh install" >&2
+
 echo "▶ Starting Ghost"
 compose up -d ghost
 

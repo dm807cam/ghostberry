@@ -18,6 +18,7 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 - 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
 - 💾 **Daily encrypted backups** via cron, with a real `restore.sh`, and optional off-site copies in **Cloudflare R2** (free up to 10 GB), so a dead SD card doesn't take your blog with it
 - 🚀 **systemd unit** for clean boot/shutdown
+- 📖 **Almanac, a clean blog theme, installed and ready**: a side rail, a serif reading column, dark mode, self-hosted fonts and no third-party requests. A new blog starts on it; an existing blog keeps its theme. See [The Almanac theme](#the-almanac-theme)
 - 🔔 **Update notices:** a banner in Ghost Admin and one email to the admins when a new Ghostberry release is out. Updating is re-running the install command, which moves to the exact image versions that release pins
 - 🍓 **Pi-aware bootstrap** — enables memory cgroups, ensures swap, installs Docker
 
@@ -153,7 +154,48 @@ docker compose logs -f
 
 # Change mail settings (or switch MAIL_MODE), then apply
 MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
+
+# The bundled theme: which version is installed, and switch to it
+./scripts/theme.sh status
+./scripts/theme.sh activate
 ```
+
+## The Almanac theme
+
+Ghostberry ships with **Almanac**, a theme for personal blogs and long reads:
+a side rail with your name, navigation and a subscribe form, and one serif
+reading column. Posts get a table of contents built from their headings.
+Images are optional everywhere.
+
+- **A new blog starts on Almanac.** The installer switches to it only while
+  nobody has signed up to Ghost Admin yet, and sets the accent colour to
+  Almanac's green. Prefer Ghost's default? Install with `GHOSTBERRY_THEME=keep`.
+- **An existing blog keeps its theme.** Almanac is installed next to it: pick it
+  under **Ghost Admin → Settings → Design → Change theme → Installed**, or run
+  `./scripts/theme.sh activate`.
+- **Settings** (Ghost Admin → Settings → Design → Customize): colour scheme
+  (Auto follows the reader's device, or force Light or Dark), post thumbnails
+  on the home page, the table of contents, the author line under posts, and
+  the "Hosted with Ghostberry" line in the footer (on by default).
+  The accent colour and the heading and body fonts follow Ghost's own Brand
+  and Typography settings.
+- **Ghost's features are covered**: members (subscribe, sign-in, members-only
+  and paid posts are marked in lists), comments, search, recommendations, the
+  announcement bar, author pages with social links, tag images, featured
+  posts, and every card in the editor, in light and dark.
+- **Translatable.** The theme's text is English; to add a language, copy
+  `locales/en.json` to e.g. `locales/de.json` and translate the values. Ghost
+  uses the file that matches the publication language.
+- **A "Plain" post template** (Post settings → Template) shows only the title
+  and text.
+- **No third-party requests.** Fonts (Fraunces, Source Serif 4, Inter; SIL Open
+  Font License) are served from your Pi.
+- **Updates replace it.** Each Ghostberry update re-installs the theme, so
+  don't edit the installed copy. To customise it, download it from Ghost Admin,
+  change `"name"` in `package.json`, and upload it as your own theme.
+
+The source is in [`themes/almanac`](themes/almanac). It passes Ghost's theme
+checker ([gscan](https://gscan.ghost.org)) for Ghost 6 with no warnings.
 
 ## File layout
 
@@ -173,7 +215,10 @@ MAIL_MODE=smtp ./setup.sh && docker compose up -d --remove-orphans
 │   ├── offsite.sh          # Cloudflare R2: test | push | list | pull | status
 │   ├── restore.sh          # inverse of backup
 │   ├── check-update.sh     # daily: new release? email the admins once
+│   ├── theme.sh            # install | activate | status (the Almanac theme)
 │   └── mail.sh             # dns | test <addr> | status
+├── themes/
+│   └── almanac/            # the bundled Ghost theme
 ├── guides/
 │   ├── MAIL.md
 │   ├── SECURITY.md

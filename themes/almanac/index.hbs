@@ -1,0 +1,36 @@
+{{!< default}}
+
+<h1 class="visually-hidden">{{@site.title}}</h1>
+
+<div class="feed">
+    {{#foreach posts}}
+        {{#if @first}}
+            {{#is "home"}}
+                {{> "post-feature"}}
+                {{#unless @last}}<h2 class="label feed-label">{{t "Earlier"}}</h2>{{/unless}}
+            {{else}}
+                {{> "post-row"}}
+            {{/is}}
+        {{else}}
+            {{> "post-row"}}
+        {{/if}}
+    {{else}}
+        <p class="empty">{{t "Nothing here yet."}}</p>
+    {{/foreach}}
+</div>
+
+{{pagination}}
+
+{{!-- On a phone the rail's form is folded into the menu, so offer it here too. --}}
+<div class="subscribe-phone">
+    {{> "subscribe"}}
+</div>
+
+{{#is "home"}}
+    {{#if @site.recommendations_enabled}}
+        <section class="recs">
+            <h2 class="label">{{t "Recommended"}}</h2>
+            {{recommendations}}
+        </section>
+    {{/if}}
+{{/is}}

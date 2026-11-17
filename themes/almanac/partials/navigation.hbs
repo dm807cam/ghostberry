@@ -1,0 +1,11 @@
+{{#if isSecondary}}
+    {{#foreach navigation}}<a href="{{url absolute="true"}}">{{label}}</a>{{/foreach}}
+{{else}}
+    {{#if navigation}}
+    <ul class="nav">
+        {{#foreach navigation}}
+            <li class="nav-item{{#if current}} is-current{{/if}}"><a href="{{url absolute="true"}}"{{#if current}} aria-current="page"{{/if}}>{{label}}</a></li>
+        {{/foreach}}
+    </ul>
+    {{/if}}
+{{/if}}

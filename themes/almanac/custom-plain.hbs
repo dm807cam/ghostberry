@@ -1,0 +1,21 @@
+{{!< default}}
+{{!-- "Plain" post template: title and text only. No feature image, table of
+      contents, author or subscribe box. Pick it under Post settings → Template. --}}
+
+{{#post}}
+<article class="post post-plain {{post_class}}">
+
+    <header class="post-head">
+        {{> "post-meta"}}
+        <h1 class="post-title">{{title}}</h1>
+        {{#if custom_excerpt}}
+            <p class="post-deck">{{custom_excerpt}}</p>
+        {{/if}}
+    </header>
+
+    <div class="content gh-content">
+        {{content}}
+    </div>
+
+</article>
+{{/post}}

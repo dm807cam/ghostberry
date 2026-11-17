@@ -1,0 +1,20 @@
+{{#if @site.members_enabled}}
+    {{#unless @member}}
+        {{#unless @site.members_invite_only}}
+            <section class="subscribe" id="subscribe">
+                <div class="subscribe-text">
+                    <h2 class="subscribe-title">{{t "The next one, by email"}}</h2>
+                    <label for="subscribe-email">{{t "New posts, straight to your inbox. Unsubscribe whenever you like."}}</label>
+                </div>
+                <form class="subscribe-form" data-members-form="subscribe">
+                    <div class="field">
+                        <input id="subscribe-email" type="email" name="email" placeholder="{{t "Email address"}}" autocomplete="email" required data-members-email>
+                        <button type="submit">{{t "Subscribe"}}</button>
+                    </div>
+                    <p class="form-note form-success" role="status">{{t "Check your inbox to confirm."}}</p>
+                    <p class="form-note form-error" role="alert" data-members-error></p>
+                </form>
+            </section>
+        {{/unless}}
+    {{/unless}}
+{{/if}}

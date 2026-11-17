@@ -1,0 +1,19 @@
+<article class="row {{post_class}}">
+    <div class="row-text">
+        {{> "post-meta"}}
+        <h2 class="row-title"><a href="{{url}}">{{title}}</a></h2>
+        <p class="row-excerpt{{#unless custom_excerpt}} is-clamped{{/unless}}">{{#if custom_excerpt}}{{custom_excerpt}}{{else}}{{excerpt words="45"}}{{/if}}</p>
+    </div>
+    {{#if @custom.show_post_thumbnails}}
+        {{#if feature_image}}
+            <a class="row-thumb" href="{{url}}" tabindex="-1" aria-hidden="true">
+                <img
+                    srcset="{{img_url feature_image size="xs"}} 200w, {{img_url feature_image size="s"}} 400w"
+                    sizes="96px"
+                    src="{{img_url feature_image size="xs"}}"
+                    alt=""
+                    loading="lazy">
+            </a>
+        {{/if}}
+    {{/if}}
+</article>
