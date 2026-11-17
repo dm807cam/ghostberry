@@ -836,7 +836,7 @@ form.success .field { display: none; }
     line-height: 20px;
     color: var(--muted);
 }
-.foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.foot-links, .foot-credit { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .foot a:hover { color: var(--ink); }
 
 /* Access marker, author, archive extras, recommendations */

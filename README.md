@@ -175,7 +175,8 @@ Images are optional everywhere.
   `./scripts/theme.sh activate`.
 - **Settings** (Ghost Admin → Settings → Design → Customize): colour scheme
   (Auto follows the reader's device, or force Light or Dark), post thumbnails
-  on the home page, the table of contents, and the author line under posts.
+  on the home page, the table of contents, the author line under posts, and
+  the "Hosted with Ghostberry" line in the footer (on by default).
   The accent colour and the heading and body fonts follow Ghost's own Brand
   and Typography settings.
 - **Ghost's features are covered**: members (subscribe, sign-in, members-only

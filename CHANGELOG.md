@@ -29,7 +29,8 @@ your blog is backed up first, as always, and **keeps the theme it has now**.
 - **Almanac covers Ghost's features:** members, comments, search,
   recommendations, the announcement bar, author pages, tag images, featured
   and members-only markers, and every editor card in light and dark. Its text
-  is English and can be translated (`locales/`).
+  is English and can be translated (`locales/`). The footer says "Hosted with
+  Ghostberry"; a theme setting turns that off.
 - **A new blog starts on Almanac.** The installer switches to it only while
   nobody has signed up to Ghost Admin yet (`GHOSTBERRY_THEME=keep` leaves
   Ghost's default). On an existing blog it is installed but not switched on:
@@ -40,6 +41,8 @@ your blog is backed up first, as always, and **keeps the theme it has now**.
   [The Almanac theme](README.md#the-almanac-theme).
 
 ### Changed
+- **The Ghostberry website now wears Almanac**: the same type, colours and
+  side-rail layout as the theme, with a section that shows it.
 - `restore.sh` re-installs Almanac after restoring, so a backup from before
   this release doesn't remove it.
 

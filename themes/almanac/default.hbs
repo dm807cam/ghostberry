@@ -22,7 +22,12 @@
     </main>
 
     <footer class="foot">
-        <span>&copy; {{date format="YYYY"}} {{@site.title}}</span>
+        <span class="foot-credit">
+            <span>&copy; {{date format="YYYY"}} {{@site.title}}</span>
+            {{#if @custom.hosted_with_ghostberry}}
+                <a href="https://dm807cam.github.io/ghostberry/">{{t "Hosted with Ghostberry"}}</a>
+            {{/if}}
+        </span>
         <span class="foot-links">
             {{#if @site.secondary_navigation}}
                 {{#foreach @site.secondary_navigation}}<a href="{{url absolute="true"}}">{{label}}</a>{{/foreach}}

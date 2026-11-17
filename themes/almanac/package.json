@@ -60,6 +60,10 @@
         "type": "boolean",
         "default": true,
         "group": "post"
+      },
+      "hosted_with_ghostberry": {
+        "type": "boolean",
+        "default": true
       }
     }
   }
