@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="{{@site.locale}}"{{#match @custom.color_scheme "Dark"}} class="theme-dark"{{/match}}{{#match @custom.color_scheme "Light"}} class="theme-light"{{/match}}>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{meta_title}}</title>
+
+    <link rel="preload" as="font" type="font/woff2" href="{{asset "fonts/source-serif-4-latin-opsz-normal.woff2"}}" crossorigin>
+    <link rel="preload" as="font" type="font/woff2" href="{{asset "fonts/fraunces-latin-opsz-normal.woff2"}}" crossorigin>
+    <link rel="stylesheet" href="{{asset "css/screen.css"}}">
+
+    {{ghost_head}}
+</head>
+<body class="{{body_class}}">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+    {{> "rail"}}
+
+    <main id="main" class="main">
+        {{{body}}}
+    </main>
+
+    <footer class="foot">
+        <span>&copy; {{date format="YYYY"}} {{@site.title}}</span>
+        <span class="foot-links">
+            {{#if @site.secondary_navigation}}
+                {{#foreach @site.secondary_navigation}}<a href="{{url absolute="true"}}">{{label}}</a>{{/foreach}}
+            {{/if}}
+            <a href="{{@site.url}}/rss/">RSS</a>
+            {{#if @site.members_enabled}}
+                {{#if @member}}
+                    <a href="#/portal/account" data-portal="account">Account</a>
+                {{else}}
+                    <a href="#/portal/signin" data-portal="signin">Sign in</a>
+                {{/if}}
+            {{/if}}
+        </span>
+    </footer>
+</div>
+
+<script src="{{asset "js/main.js"}}" defer></script>
+{{ghost_foot}}
+</body>
+</html>

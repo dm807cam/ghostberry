@@ -15,6 +15,30 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.1.0] - 2026-11-17
+
+Ghostberry now ships with its own theme. Re-run the install command to get it;
+your blog is backed up first, as always, and **keeps the theme it has now**.
+
+### Added
+- **Almanac, a clean theme for personal blogs.** A side rail with your name,
+  navigation and a subscribe form; one serif reading column; a table of
+  contents on posts; light and dark mode; phone layout. Fonts are served from
+  your Pi, so pages make no third-party requests. It passes Ghost's theme
+  checker for Ghost 6 with no warnings.
+- **A new blog starts on Almanac.** The installer switches to it only while
+  nobody has signed up to Ghost Admin yet (`GHOSTBERRY_THEME=keep` leaves
+  Ghost's default). On an existing blog it is installed but not switched on:
+  pick it under **Settings → Design → Change theme → Installed**, or run
+  `./scripts/theme.sh activate`.
+- **`scripts/theme.sh`** (`install`, `activate`, `status`). Updates re-install
+  the theme, so customise a renamed copy, not the installed one: see
+  [The Almanac theme](README.md#the-almanac-theme).
+
+### Changed
+- `restore.sh` re-installs Almanac after restoring, so a backup from before
+  this release doesn't remove it.
+
 ## [1.0.2] - 2026-11-17
 
 Documentation fixes only: your blog and its containers stay the same. Updating

@@ -1,0 +1,19 @@
+{{#match pages ">" 1}}
+<nav class="pagination" aria-label="Pagination">
+    <span class="page-count">Page {{page}} of {{pages}}</span>
+    <span class="page-links">
+        {{#if prev}}
+            <a href="{{page_url prev}}">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9H3"/><path d="M7.5 4.5 3 9l4.5 4.5"/></svg>
+                Newer posts
+            </a>
+        {{/if}}
+        {{#if next}}
+            <a href="{{page_url next}}">
+                Older posts
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h12"/><path d="M10.5 4.5 15 9l-4.5 4.5"/></svg>
+            </a>
+        {{/if}}
+    </span>
+</nav>
+{{/match}}

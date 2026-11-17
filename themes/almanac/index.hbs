@@ -1,0 +1,23 @@
+{{!< default}}
+
+<div class="feed">
+    {{#foreach posts}}
+        {{#if @first}}
+            {{#is "home"}}
+                {{> "post-feature"}}
+                {{#unless @last}}<h2 class="label feed-label">Earlier</h2>{{/unless}}
+            {{else}}
+                {{> "post-row"}}
+            {{/is}}
+        {{else}}
+            {{> "post-row"}}
+        {{/if}}
+    {{/foreach}}
+</div>
+
+{{pagination}}
+
+{{!-- On a phone the rail's form is folded into the menu, so offer it here too. --}}
+<div class="subscribe-phone">
+    {{> "subscribe"}}
+</div>

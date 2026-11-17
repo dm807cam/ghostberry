@@ -1,0 +1,11 @@
+<p class="meta">
+    <time datetime="{{date format="YYYY-MM-DD"}}">{{date format="MMM D, YYYY"}}</time>
+    {{#primary_tag}}
+        <span class="meta-dot" aria-hidden="true"></span>
+        <a class="meta-tag" href="{{url}}">{{name}}</a>
+    {{/primary_tag}}
+    {{#if show_reading_time}}
+        <span class="meta-dot" aria-hidden="true"></span>
+        <span>{{reading_time}}</span>
+    {{/if}}
+</p>

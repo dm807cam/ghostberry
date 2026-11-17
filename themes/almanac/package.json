@@ -1,0 +1,47 @@
+{
+  "name": "almanac",
+  "description": "A quiet theme for personal blogs: a side rail, a serif reading column, and images only where you want them. Ships with Ghostberry.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "engines": {
+    "ghost": ">=5.0.0"
+  },
+  "author": {
+    "name": "Ghostberry",
+    "email": "dm807cam@users.noreply.github.com",
+    "url": "https://github.com/dm807cam/ghostberry"
+  },
+  "keywords": [
+    "ghost",
+    "theme",
+    "ghost-theme"
+  ],
+  "config": {
+    "posts_per_page": 6,
+    "image_sizes": {
+      "xs": { "width": 200 },
+      "s": { "width": 400 },
+      "m": { "width": 720 },
+      "l": { "width": 1280 },
+      "xl": { "width": 2000 }
+    },
+    "card_assets": true,
+    "custom": {
+      "color_scheme": {
+        "type": "select",
+        "options": ["Auto", "Light", "Dark"],
+        "default": "Auto"
+      },
+      "show_post_thumbnails": {
+        "type": "boolean",
+        "default": true,
+        "group": "homepage"
+      },
+      "show_table_of_contents": {
+        "type": "boolean",
+        "default": true,
+        "group": "post"
+      }
+    }
+  }
+}

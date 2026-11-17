@@ -20,7 +20,8 @@
 #      the blog's admins when a new Ghostberry release is out
 #   9. (with --harden) installs ufw (deny incoming, allow SSH; replaces
 #      existing ufw rules) + unattended-upgrades
-#  10. Backs up an existing install, then docker compose up -d, polls health
+#  10. Backs up an existing install, installs the Almanac theme, then
+#      docker compose up -d, polls health
 #
 # Env knobs:
 #   INSTALL_DIR        target directory (default /opt/ghostberry)
@@ -33,6 +34,8 @@
 #   OFFSITE=r2 + R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 #                      copy every backup to Cloudflare R2 (see guides/BACKUP.md)
 #   NONINTERACTIVE=1   refuse any prompting
+#   GHOSTBERRY_THEME=keep  leave a brand-new blog on Ghost's default theme
+#                      (Almanac is still installed, just not switched on)
 #   GHOSTBERRY_USER    user account to own the install (default: invoking user)
 #   SKIP_DOCKER=1      assume docker is already installed and working
 #   SKIP_HEALTH=1      don't wait for Ghost to become healthy at the end
@@ -338,6 +341,14 @@ if [[ -n "${OLD_VERSION}" && "${OLD_VERSION}" != "${NEW_VERSION}" ]] \
   sudo -u "${GHOSTBERRY_USER}" ./scripts/check-update.sh --clear-notices || true
 fi
 
+# Almanac, the bundled theme: copy it into Ghost's content volume. It shows
+# up under Settings → Design → Change theme; nothing is switched here.
+log "Installing the Almanac theme"
+THEME_STATE="$(sudo -u "${GHOSTBERRY_USER}" ./scripts/theme.sh install 2>/dev/null | tail -n 1 || true)"
+[[ "${THEME_STATE}" =~ ^(updated|unchanged)$ ]] \
+  || warn "Couldn't install the Almanac theme; try later with: ./scripts/theme.sh install"
+GHOST_STARTED_BEFORE="$(docker inspect -f '{{.State.StartedAt}}' ghost 2>/dev/null || true)"
+
 log "Starting Ghostberry"
 if systemctl is-active --quiet ghostberry.service; then
   # The unit is a oneshot with RemainAfterExit, so `start` would be a no-op
@@ -345,6 +356,14 @@ if systemctl is-active --quiet ghostberry.service; then
   docker compose up -d --remove-orphans
 else
   systemctl start ghostberry.service
+fi
+
+# Ghost reads theme files when it starts. If the theme changed but Ghost
+# kept running (same image, same settings), restart it once.
+if [[ "${THEME_STATE}" == "updated" && -n "${GHOST_STARTED_BEFORE}" \
+      && "$(docker inspect -f '{{.State.StartedAt}}' ghost 2>/dev/null || true)" == "${GHOST_STARTED_BEFORE}" ]]; then
+  log "Restarting Ghost to load the updated Almanac theme"
+  docker compose restart ghost || true
 fi
 
 if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
@@ -363,6 +382,12 @@ if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
     warn "  cd ${INSTALL_DIR} && docker compose logs --tail=100"
   else
     log "Ghost is healthy."
+    # A blog nobody has set up yet starts on Almanac. An existing blog
+    # keeps the theme it has (theme.sh checks; GHOSTBERRY_THEME=keep skips).
+    if [[ "${GHOSTBERRY_THEME:-almanac}" != "keep" ]]; then
+      sudo -u "${GHOSTBERRY_USER}" ./scripts/theme.sh activate --if-new \
+        || warn "Couldn't switch to the Almanac theme; pick it in Ghost Admin → Settings → Design."
+    fi
   fi
 fi
 
@@ -402,6 +427,7 @@ cat <<EOF
    Update:    re-run the install command (Ghost Admin shows a banner and the
               admins get an email when a new release is out)
    Mail:      cd ${INSTALL_DIR} && ./scripts/mail.sh test you@example.com
+   Theme:     Almanac is installed (Ghost Admin → Settings → Design → Change theme)
    Off-site:  cd ${INSTALL_DIR} && ./scripts/offsite.sh status
 
 EOF
