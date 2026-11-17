@@ -182,8 +182,9 @@ Images are optional everywhere.
   and paid posts are marked in lists), comments, search, recommendations, the
   announcement bar, author pages with social links, tag images, featured
   posts, and every card in the editor, in light and dark.
-- **English and German** text is built in and follows the publication language
-  set in Ghost. Add a language by copying `locales/en.json`.
+- **Translatable.** The theme's text is English; to add a language, copy
+  `locales/en.json` to e.g. `locales/de.json` and translate the values. Ghost
+  uses the file that matches the publication language.
 - **A "Plain" post template** (Post settings → Template) shows only the title
   and text.
 - **No third-party requests.** Fonts (Fraunces, Source Serif 4, Inter; SIL Open

@@ -29,7 +29,7 @@ your blog is backed up first, as always, and **keeps the theme it has now**.
 - **Almanac covers Ghost's features:** members, comments, search,
   recommendations, the announcement bar, author pages, tag images, featured
   and members-only markers, and every editor card in light and dark. Its text
-  comes in English and German, following the publication language.
+  is English and can be translated (`locales/`).
 - **A new blog starts on Almanac.** The installer switches to it only while
   nobody has signed up to Ghost Admin yet (`GHOSTBERRY_THEME=keep` leaves
   Ghost's default). On an existing blog it is installed but not switched on:

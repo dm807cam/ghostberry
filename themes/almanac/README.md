@@ -11,7 +11,7 @@ a side rail, a serif reading column, and images only where you want them.
   Members-only and paid posts are marked in lists.
 - Authors (optional line under posts, author pages with social links), tag
   images, featured posts, recommendations, announcement bar.
-- Text in English and German (`locales/`); copy `en.json` to add a language.
+- Text is English and translatable: copy `locales/en.json` to add a language.
 - A "Plain" post template (`custom-plain.hbs`): title and text only.
 - Fonts are in `assets/fonts` (SIL Open Font License, see `OFL.txt`). No build step:
   edit `assets/css/screen.css` and the `.hbs` templates directly.
