@@ -15,6 +15,30 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.2.0] - 2026-11-18
+
+Optional web analytics. Nothing changes unless you turn it on: re-run the
+install command and answer yes to "Set up analytics now?".
+
+### Added
+- **Web analytics with [Umami](https://umami.is).** Visitors, page views, top
+  posts, referrers, countries and devices on a dashboard of your own. No
+  cookies, and the data stays on your Pi. The installer runs Umami and a
+  small Postgres next to Ghost (about 160 MB of RAM), replaces Umami's
+  default login with a generated password, creates a website for your blog
+  and adds the tracking script to Ghost's site header (Code injection, between
+  `ghostberry:analytics` markers; the rest of it is left alone). It needs
+  one more route on your tunnel, e.g. `stats.example.com` →
+  `http://umami:3000`. See [guides/ANALYTICS.md](guides/ANALYTICS.md).
+- **`scripts/analytics.sh`** (`connect`, `secure`, `disconnect`, `status`,
+  `login`). Turn analytics on later with `ANALYTICS=umami ./setup.sh`, off
+  with `ANALYTICS=none ./setup.sh`; the statistics are kept either way.
+- **Backups include the analytics database** when analytics is on, and
+  `restore.sh` puts it back and reconnects Ghost.
+
+### Fixed
+- `install.sh --help` printed only part of the list of settings.
+
 ## [1.1.1] - 2026-11-18
 
 A fix for the one-command install. If your blog is already running, nothing

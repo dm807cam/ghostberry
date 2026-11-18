@@ -6,12 +6,12 @@
       "created_at": "2026-11-18T00:00:00.000Z",
       "messages": [
         {
-          "id": "ghostberry-1.1.1",
+          "id": "ghostberry-1.2.0",
           "version": "all",
           "type": "info",
           "top": true,
           "dismissible": true,
-          "content": "<strong>Ghostberry 1.1.1 is available</strong> (this site runs 1.0.1). <a href=\"https://github.com/dm807cam/ghostberry/blob/main/CHANGELOG.md\" target=\"_blank\" rel=\"noopener\">What&#8217;s new</a>. To update, run the install command again on your Raspberry Pi: <code>curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash</code>"
+          "content": "<strong>Ghostberry 1.2.0 is available</strong> (this site runs 1.0.1). <a href=\"https://github.com/dm807cam/ghostberry/blob/main/CHANGELOG.md\" target=\"_blank\" rel=\"noopener\">What&#8217;s new</a>. To update, run the install command again on your Raspberry Pi: <code>curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash</code>"
         }
       ]
     }

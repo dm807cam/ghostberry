@@ -11,6 +11,7 @@ Each archive contains:
 | `database.sql.gz` | `mysqldump` of the `ghost` database (single-transaction, utf8mb4) |
 | `content.tar.gz` | The entire `/var/lib/ghost/content` directory — themes, images, files, settings, routes, redirects |
 | `mail.tar.gz` | DKIM private key of the built-in mail server (only when it's enabled), so DNS records stay valid after a restore |
+| `analytics.sql.gz` | `pg_dump` of the Umami analytics database (only when [analytics](ANALYTICS.md) is on) |
 | `images.txt` | Pinned image versions at the time of backup (for reproducible restores) |
 | `timestamp.txt` | UTC timestamp |
 

@@ -6,6 +6,7 @@
 #   - Ghost content volume (themes, images, files, settings)
 #   - Built-in mail server's DKIM key (if the mail profile is enabled), so a
 #     restore doesn't force you to republish DNS records
+#   - Umami analytics database (if the analytics profile is enabled)
 #
 # Optional encryption: set BACKUP_ENCRYPTION_KEY in .env to AES-256 encrypt
 # the resulting archive with openssl.
@@ -64,6 +65,12 @@ compose exec -T ghost tar -C /var/lib/ghost/content -czf - . > "${WORK}/content.
 if compose ps --status running --services 2>/dev/null | grep -qx mail; then
   echo "  • archiving mail DKIM keys"
   compose exec -T mail tar -C /data -czf - dkim_keys > "${WORK}/mail.tar.gz"
+fi
+
+if compose ps --status running --services 2>/dev/null | grep -qx umami_db; then
+  echo "  • dumping analytics database"
+  compose exec -T umami_db pg_dump -U umami --clean --if-exists --no-owner umami \
+    | gzip -9 > "${WORK}/analytics.sql.gz"
 fi
 
 echo "  • capturing image versions"

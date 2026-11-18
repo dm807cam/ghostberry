@@ -6,7 +6,8 @@
 #   ./scripts/restore.sh backups/ghost_backup_YYYYMMDDTHHMMSSZ.tar.gz.enc
 #
 # Decrypts (if .enc), stops Ghost, restores the MySQL ghost DB, the
-# ghost_content volume and (if present) the mail DKIM keys, then restarts.
+# ghost_content volume and (if present) the mail DKIM keys and the Umami
+# analytics database, then restarts.
 
 set -euo pipefail
 
@@ -122,9 +123,34 @@ if [[ -f "${WORK}/mail.tar.gz" ]]; then
     '
 fi
 
+if [[ -f "${WORK}/analytics.sql.gz" ]]; then
+  if [[ "${ANALYTICS:-none}" == "umami" ]]; then
+    echo "▶ Restoring analytics database"
+    compose stop umami 2>/dev/null || true
+    compose up -d umami_db
+    for _ in $(seq 1 60); do
+      [[ "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{end}}' umami_db 2>/dev/null || true)" == "healthy" ]] && break
+      sleep 2
+    done
+    gunzip -c "${WORK}/analytics.sql.gz" \
+      | compose exec -T umami_db psql -q -v ON_ERROR_STOP=1 -U umami -d umami >/dev/null
+    compose up -d umami
+  else
+    echo "ℹ️  This backup has analytics data, but analytics is off here. To bring it back:" >&2
+    echo "   ANALYTICS=umami ./setup.sh && docker compose up -d, then restore again." >&2
+  fi
+fi
+
 # A backup from before Ghostberry 1.1 has no Almanac theme in it.
 "${SCRIPT_DIR}/theme.sh" install >/dev/null 2>&1 \
   || echo "⚠️  Couldn't re-install the Almanac theme; run ./scripts/theme.sh install" >&2
+
+# The restored Ghost database may predate analytics, or point at another
+# Umami website: put the matching tracking script back before Ghost starts.
+if [[ "${ANALYTICS:-none}" == "umami" ]]; then
+  "${SCRIPT_DIR}/analytics.sh" connect \
+    || echo "⚠️  Couldn't reconnect analytics; run ./scripts/analytics.sh connect" >&2
+fi
 
 echo "▶ Starting Ghost"
 compose up -d ghost
