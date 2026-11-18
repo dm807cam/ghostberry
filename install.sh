@@ -43,6 +43,14 @@
 
 set -euo pipefail
 
+# Everything lives in main(), called on the last line. With
+# `curl … | sudo bash`, bash reads this script from stdin as it runs, so any
+# command that reads stdin (docker compose run/exec -T does) would swallow the
+# rest of the script and bash would exit 0 halfway through. A function body is
+# read in full before main runs, so nothing is left on stdin to swallow.
+# (The body is deliberately not indented, to keep heredocs and history intact.)
+main() {
+
 # ----------------------------------------------------------------------------
 # Args & defaults
 # ----------------------------------------------------------------------------
@@ -436,3 +444,7 @@ if [[ "${NEEDS_REBOOT:-0}" == "1" ]]; then
   warn "Memory cgroups were enabled in the boot cmdline — reboot to activate them:"
   warn "  sudo reboot"
 fi
+
+}
+
+main "$@"
