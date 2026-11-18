@@ -15,6 +15,19 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.1.1] - 2026-11-18
+
+A fix for the one-command install. If your blog is already running, nothing
+changes for you; re-run the install command as usual to get it.
+
+### Fixed
+- **The install command now runs to the end.** On a fresh install,
+  `curl … | sudo bash` stopped right after "Installing the Almanac theme" and
+  still reported success: Ghost was never started, and the health check, the
+  Almanac setup and the mail DNS records were skipped. A re-run could stop the
+  same way after its backup. If this happened to you, run the install command
+  again, or start Ghost with `sudo systemctl start ghostberry`.
+
 ## [1.1.0] - 2026-11-17
 
 Ghostberry now ships with its own theme. Re-run the install command to get it;
