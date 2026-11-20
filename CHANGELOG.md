@@ -15,6 +15,34 @@ docs/update-check/ files in the same PR. Patch = version/security bumps and
 fixes, minor = new features, major = changes that need manual steps.
 -->
 
+## [1.1.2] - 2026-11-20
+
+Security and maintenance update. Re-run the install command to get it; your
+blog is backed up first, as always.
+
+### Security
+- **Mail container (maddy) 0.9.7 → 0.9.8**, a security release. It fixes a
+  crash of the whole mail server from one crafted IMAP line
+  ([GHSA-3gp8-jmrg-pq2v](https://github.com/foxcpp/maddy/security/advisories/GHSA-3gp8-jmrg-pq2v),
+  high) and a crash in LDAP sign-in
+  ([GHSA-854c-vjm7-rqw8](https://github.com/foxcpp/maddy/security/advisories/GHSA-854c-vjm7-rqw8)).
+  Ghostberry's mail container only sends mail and uses neither IMAP nor LDAP,
+  so your blog was not exposed; the update keeps it on a supported version
+  ([release notes](https://github.com/foxcpp/maddy/releases/tag/v0.9.8)).
+- **cloudflared 2026.11.0 → 2026.11.1.** Moves to OpenTelemetry 1.47.0
+  ([GHSA-q7gw-24fr-5p69](https://osv.dev/vulnerability/GHSA-q7gw-24fr-5p69)),
+  ships a patched zlib in the image, and reconnects the tunnel by itself when
+  Cloudflare moves your account to another region
+  ([release notes](https://github.com/cloudflare/cloudflared/blob/2026.11.1/RELEASE_NOTES)).
+
+### Changed
+- **Ghost 6.77.0 → 6.78.0.** Fixes gift redemption for new members on
+  paid-only sites, feature image captions, links in cards that got mangled,
+  and analytics date ranges; Stripe Checkout can now ask for a shipping
+  address and phone number
+  ([release notes](https://github.com/TryGhost/Ghost/releases/tag/v6.78.0)).
+  No new Ghost security advisories since 6.77.0.
+
 ## [1.1.1] - 2026-11-18
 
 A fix for the one-command install. If your blog is already running, nothing

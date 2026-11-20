@@ -1,6 +1,6 @@
 {
-  "version": "1.1.1",
-  "released": "2026-11-18",
+  "version": "1.1.2",
+  "released": "2026-11-20",
   "changelog": "https://github.com/dm807cam/ghostberry/blob/main/CHANGELOG.md",
   "install": "curl -fsSL https://raw.githubusercontent.com/dm807cam/ghostberry/main/install.sh | sudo bash"
 }
