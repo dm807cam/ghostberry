@@ -12,6 +12,8 @@
 #   OFFSITE                  r2 | none   — copy every backup to Cloudflare R2
 #     r2:      R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
 #              optionally R2_JURISDICTION (default|eu|fedramp), OFFSITE_KEEP
+#   ANALYTICS                umami | none   — web analytics with Umami
+#     umami:   ANALYTICS_URL (default https://stats.<your domain>)
 #   NONINTERACTIVE=1         Fail rather than prompt for missing values
 #
 # Precedence on re-runs: a non-empty environment variable beats the value
@@ -88,6 +90,7 @@ OVERRIDABLE=(
   OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
   R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE
   UPDATE_NOTICES GHOSTBERRY_FEED_URL
+  ANALYTICS ANALYTICS_URL UMAMI_IMAGE UMAMI_DB_IMAGE UMAMI_MEM_LIMIT UMAMI_DB_MEM_LIMIT
 )
 declare -A FROM_ENV=()
 for v in "${OVERRIDABLE[@]}"; do
@@ -256,15 +259,72 @@ case "${MAIL_MODE}" in
 esac
 : "${MAIL_PORT:=587}" "${MAIL_SECURE:=false}"
 
-# COMPOSE_PROFILES decides whether the ghost_mail container runs. Keep any
-# other profiles the user added by hand.
+# --- Web analytics (Umami) ------------------------------------------------
+# Umami counts page views without cookies and shows them on its own
+# dashboard. It runs here (umami + a small Postgres), and readers' browsers
+# reach it through the tunnel at ANALYTICS_URL, a second public hostname.
+: "${ANALYTICS:=}" "${ANALYTICS_URL:=}"
+if [[ -z "${ANALYTICS}" ]]; then
+  if [[ "${NONINTERACTIVE:-0}" == "1" ]]; then
+    ANALYTICS=none
+  else
+    echo
+    echo "📊 Web analytics — count visits and see top posts and referrers with"
+    echo "   Umami: no cookies, no consent banner, the data stays on this Pi."
+    echo "   Adds ~250 MB RAM and one more route on your Cloudflare Tunnel"
+    echo "   (see guides/ANALYTICS.md)."
+    ask_yn "   Set up analytics now?" n
+    if [[ "${REPLY}" == "y" ]]; then ANALYTICS=umami; else ANALYTICS=none; fi
+  fi
+fi
+
+# stats.<site's domain>: blog.example.com and www.example.com → stats.example.com.
+# Cloudflare's free certificate covers one level below the domain
+# (*.example.com), so stats.blog.example.com would get no HTTPS.
+default_analytics_host() {
+  # The last two labels, or three for suffixes like co.uk (example.co.uk).
+  local keep=2
+  [[ "${GHOST_HOST}" =~ \.(co|com|org|net|ac|gov|edu|ne|or)\.[a-z]{2}$ ]] && keep=3
+  printf 'stats.%s' "$(awk -F. -v k="${keep}" '{ s = $NF; for (i = NF - 1; i > NF - k && i > 0; i--) s = $i "." s; print s }' <<< "${GHOST_HOST}")"
+}
+
+case "${ANALYTICS}" in
+  umami)
+    prompt ANALYTICS_URL "   Analytics address (a new hostname on your tunnel)" "https://$(default_analytics_host)"
+    [[ "${ANALYTICS_URL}" =~ ^https?:// ]] || ANALYTICS_URL="https://${ANALYTICS_URL}"
+    ANALYTICS_URL="${ANALYTICS_URL%/}"
+    ANALYTICS_URL="${ANALYTICS_URL,,}"
+    [[ "${ANALYTICS_URL}" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] \
+      || die "ANALYTICS_URL must be https:// plus a hostname, nothing else (got '${ANALYTICS_URL}')."
+    analytics_host="${ANALYTICS_URL#https://}"
+    [[ "${analytics_host}" == "${GHOST_HOST}" ]] \
+      && die "ANALYTICS_URL needs its own hostname, not the blog's (${GHOST_HOST}), e.g. https://$(default_analytics_host)."
+    zone="$(default_analytics_host)"; zone="${zone#stats.}"
+    if [[ "${analytics_host}" == *".${zone}" && "${analytics_host%".${zone}"}" == *.* ]]; then
+      warn "${analytics_host} is more than one level below ${zone}. Cloudflare's free"
+      warn "certificate doesn't cover that, so browsers would refuse it. Consider https://$(default_analytics_host)."
+    fi
+    mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+    if (( mem_kb > 0 && mem_kb < 3 * 1024 * 1024 )); then
+      warn "This machine has under 3 GB of RAM. Umami adds about 250 MB; it fits on a"
+      warn "2 GB Pi next to Ghost, but leaves little headroom."
+    fi
+    ;;
+  none) ;;
+  *) die "ANALYTICS must be umami or none (got '${ANALYTICS}')." ;;
+esac
+
+# COMPOSE_PROFILES decides whether the optional containers run: "mail"
+# (ghost_mail) and "analytics" (umami, umami_db). Keep any other profiles
+# the user added by hand.
 PROFILES=()
 IFS=',' read -r -a _p <<< "${COMPOSE_PROFILES:-}"
 for p in "${_p[@]}"; do
   p="${p//[[:space:]]/}"
-  [[ -n "${p}" && "${p}" != "mail" ]] && PROFILES+=("${p}")
+  [[ -n "${p}" && "${p}" != "mail" && "${p}" != "analytics" ]] && PROFILES+=("${p}")
 done
 [[ "${MAIL_MODE}" == "builtin" ]] && PROFILES+=("mail")
+[[ "${ANALYTICS}" == "umami" ]] && PROFILES+=("analytics")
 COMPOSE_PROFILES="$(IFS=,; echo "${PROFILES[*]}")"
 
 # --- Off-site backups (Cloudflare R2) ------------------------------------
@@ -322,7 +382,7 @@ esac
 # Older setup.sh versions wrote their *defaults* into .env, which froze
 # those installs on them forever. Clear exactly those old defaults (unless
 # passed in explicitly this run) so the pinned versions apply again.
-for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE UMAMI_IMAGE UMAMI_DB_IMAGE; do
   [[ -n "${FROM_ENV[$v]:-}" ]] && continue
   case "${!v:-}" in
     ghost:5-alpine)
@@ -407,6 +467,25 @@ GHOST_DB_PASSWORD="${GHOST_DB_PASSWORD:-$(genpass)}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(genpass)}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(genpass)}"
 
+# Umami's secrets. Made once and kept even if analytics is switched off,
+# because Postgres only takes its password when the umami_db volume is new.
+# UMAMI_ADMIN_PASSWORD is what scripts/analytics.sh sets for the dashboard's
+# "admin" user in place of Umami's default.
+: "${UMAMI_DB_PASSWORD:=}" "${UMAMI_APP_SECRET:=}" "${UMAMI_ADMIN_PASSWORD:=}"
+if [[ "${ANALYTICS}" == "umami" ]]; then
+  if [[ -z "${UMAMI_DB_PASSWORD}" ]] && command -v docker >/dev/null 2>&1 \
+     && docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qE '(^|_)umami_db$'; then
+    echo "❌ A umami_db Docker volume already exists but UMAMI_DB_PASSWORD is missing from .env." >&2
+    echo "   A new password would not reach the existing database. Recover the old .env," >&2
+    echo "   or delete the analytics data and start over:" >&2
+    echo "     docker volume ls | awk '/umami_db/ {print \$2}' | xargs -r docker volume rm" >&2
+    exit 1
+  fi
+  UMAMI_DB_PASSWORD="${UMAMI_DB_PASSWORD:-$(genpass)}"
+  UMAMI_APP_SECRET="${UMAMI_APP_SECRET:-$(genpass)}"
+  UMAMI_ADMIN_PASSWORD="${UMAMI_ADMIN_PASSWORD:-$(genpass)}"
+fi
+
 # Quote a value for .env so both bash (set -a; source) AND
 # docker compose's dotenv parser interpret it identically.
 # Strategy: wrap in double quotes, backslash-escape \  "  $  `.
@@ -430,7 +509,7 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'GHOST_DB_PASSWORD=%s\n'                       "$(shq "${GHOST_DB_PASSWORD}")"
   printf 'MYSQL_ROOT_PASSWORD=%s\n\n'                   "$(shq "${MYSQL_ROOT_PASSWORD}")"
   printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\n\n'               "$(shq "${CLOUDFLARE_TUNNEL_TOKEN}")"
-  printf '# Optional containers ("mail" = built-in mail server).\n'
+  printf '# Optional containers ("mail" = built-in mail server, "analytics" = Umami).\n'
   printf 'COMPOSE_PROFILES=%s\n\n'                      "$(shq "${COMPOSE_PROFILES}")"
   printf '# Mail mode: builtin | smtp | none\n'
   printf 'MAIL_MODE=%s\n'     "$(shq "${MAIL_MODE}")"
@@ -463,6 +542,14 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'R2_ACCESS_KEY_ID=%s\n'     "$(shq "${R2_ACCESS_KEY_ID}")"
   printf 'R2_SECRET_ACCESS_KEY=%s\n' "$(shq "${R2_SECRET_ACCESS_KEY}")"
   printf 'OFFSITE_KEEP=%s\n\n'        "$(shq "${OFFSITE_KEEP}")"
+  printf '# Web analytics: umami | none. See guides/ANALYTICS.md.\n'
+  printf 'ANALYTICS=%s\n'            "$(shq "${ANALYTICS}")"
+  printf 'ANALYTICS_URL=%s\n'        "$(shq "${ANALYTICS_URL}")"
+  printf '# Generated. The dashboard login is "admin" + UMAMI_ADMIN_PASSWORD; if you\n'
+  printf '# change it in Umami, change it here too.\n'
+  printf 'UMAMI_ADMIN_PASSWORD=%s\n' "$(shq "${UMAMI_ADMIN_PASSWORD}")"
+  printf 'UMAMI_DB_PASSWORD=%s\n'    "$(shq "${UMAMI_DB_PASSWORD}")"
+  printf 'UMAMI_APP_SECRET=%s\n\n'   "$(shq "${UMAMI_APP_SECRET}")"
   printf '# Ghostberry version and update notices (written by setup.sh).\n'
   printf 'GHOSTBERRY_VERSION=%s\n'   "$(shq "${GHOSTBERRY_VERSION}")"
   printf 'UPDATE_NOTICES=%s\n'       "$(shq "${UPDATE_NOTICES}")"
@@ -472,7 +559,7 @@ trap 'rm -f "${TMP}"' EXIT
   [[ -n "${GHOST_IMAGE_HOLD}" ]] && printf '# Set by setup.sh to avoid downgrading Ghost; cleared automatically.\nGHOST_IMAGE_HOLD=%s\n' "$(shq "${GHOST_IMAGE_HOLD}")"
   printf '\n# Image overrides. Empty = the version this Ghostberry release pins\n'
   printf '# (docker-compose.yml). A tag set here is never updated for you.\n'
-  for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+  for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE UMAMI_IMAGE UMAMI_DB_IMAGE; do
     if [[ -n "${!v:-}" ]]; then printf '%s=%s\n' "${v}" "$(shq "${!v}")"; else printf '# %s=\n' "${v}"; fi
   done
   printf '\n'
@@ -481,6 +568,8 @@ trap 'rm -f "${TMP}"' EXIT
   printf 'DB_MEM_LIMIT=%s\n'           "$(shq "${DB_MEM_LIMIT:-512m}")"
   printf 'CLOUDFLARED_MEM_LIMIT=%s\n'  "$(shq "${CLOUDFLARED_MEM_LIMIT:-128m}")"
   printf 'MAIL_MEM_LIMIT=%s\n'         "$(shq "${MAIL_MEM_LIMIT:-64m}")"
+  printf 'UMAMI_MEM_LIMIT=%s\n'        "$(shq "${UMAMI_MEM_LIMIT:-384m}")"
+  printf 'UMAMI_DB_MEM_LIMIT=%s\n'     "$(shq "${UMAMI_DB_MEM_LIMIT:-160m}")"
   printf 'MYSQL_BUFFER_POOL=%s\n'      "$(shq "${MYSQL_BUFFER_POOL:-128M}")"
 } > "${TMP}"
 mv "${TMP}" .env
@@ -500,9 +589,18 @@ if [[ "${MAIL_MODE}" != "builtin" ]] && command -v docker >/dev/null 2>&1 \
     || docker rm -f ghost_mail >/dev/null 2>&1 || true
 fi
 
+# Analytics switched off: remove its containers the same way. The umami_db
+# volume (the statistics) is kept, so switching back on picks them up again.
+if [[ "${ANALYTICS}" != "umami" ]] && command -v docker >/dev/null 2>&1 \
+   && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qxE 'umami|umami_db'; then
+  echo "▶ Removing the analytics containers (ANALYTICS=${ANALYTICS})"
+  docker compose --profile analytics rm --stop --force umami umami_db >/dev/null 2>&1 \
+    || docker rm -f umami umami_db >/dev/null 2>&1 || true
+fi
+
 echo "✅ .env written ($(stat -c%a .env 2>/dev/null || stat -f%Lp .env) perms)"
 echo "   Ghostberry ${GHOSTBERRY_VERSION} · GHOST_URL=${GHOST_URL}"
-for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE; do
+for v in GHOST_IMAGE MYSQL_IMAGE CLOUDFLARED_IMAGE MAIL_IMAGE RCLONE_IMAGE UMAMI_IMAGE UMAMI_DB_IMAGE; do
   [[ -n "${!v:-}" ]] && echo "   Note: ${v}=${!v} is pinned in .env and won't follow Ghostberry releases."
 done
 # An override older than this release's pin misses its (security) fixes.
@@ -534,4 +632,10 @@ if [[ "${OFFSITE}" == "r2" ]]; then
   echo "         Check the credentials with: ./scripts/offsite.sh test"
 else
   echo "   Off-site backups: off (OFFSITE=r2 ./setup.sh to enable)"
+fi
+if [[ "${ANALYTICS}" == "umami" ]]; then
+  echo "   Analytics: Umami at ${ANALYTICS_URL}"
+  echo "         Add the tunnel route: ${ANALYTICS_URL#https://} → http://umami:3000 (guides/ANALYTICS.md)"
+else
+  echo "   Analytics: off (ANALYTICS=umami ./setup.sh to enable)"
 fi

@@ -178,13 +178,14 @@ sudo ufw status verbose
 
 ### Internal Network Isolation
 
-Three private Docker networks, each shared only by the containers that need it:
+Private Docker networks, each shared only by the containers that need it:
 
 | Network | Members | Purpose |
 |---|---|---|
 | `frontend` | cloudflared, ghost | public ingress path |
 | `backend` | ghost, db | database; cloudflared cannot reach MySQL |
 | `mail` | ghost, mail | built-in mail relay; nothing else can submit mail |
+| `analytics` | umami, umami_db | Umami's Postgres; `internal`, so no internet access (umami is also on `frontend` for the tunnel) |
 
 No container publishes a port on the host.
 
@@ -196,6 +197,15 @@ The optional `ghost_mail` container (maddy, see [MAIL.md](MAIL.md)) is **send-on
 - Read-only root filesystem, `cap_drop: ALL`, `no-new-privileges`, 64 MB memory cap.
 - Its DKIM private key lives in the `mail_data` volume (mode 600) and is included in the encrypted backup. Anyone holding it can sign mail as your domain, so if you suspect it leaked, rotate it: delete the volume's `dkim_keys/`, restart the container, and publish the new record from `./scripts/mail.sh dns`.
 - Relay credentials (`MAIL_RELAY_PASSWORD`) live only in `.env`.
+
+### Web Analytics (Umami)
+
+The optional `umami` and `umami_db` containers (see [ANALYTICS.md](ANALYTICS.md)):
+- Umami is public on purpose (readers' browsers send it page views), but only through the tunnel at `ANALYTICS_URL`. No ports are published.
+- Umami ships with the login `admin` / `umami`. The installer replaces it with `UMAMI_ADMIN_PASSWORD`, a generated password in `.env`, within seconds of Umami's first start (`./scripts/analytics.sh secure`, also part of `connect`). If you start Umami by hand with `docker compose up -d`, run `./scripts/analytics.sh connect` right after.
+- Umami runs with `cap_drop: ALL` and `no-new-privileges`; Postgres keeps only the capabilities its entrypoint needs to set up its data directory.
+- The database password and `UMAMI_APP_SECRET` (which signs dashboard sessions) live only in `.env`.
+- Telemetry and Umami's own update check are off.
 
 ---
 

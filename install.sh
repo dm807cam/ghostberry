@@ -22,6 +22,7 @@
 #      existing ufw rules) + unattended-upgrades
 #  10. Backs up an existing install, installs the Almanac theme, then
 #      docker compose up -d, polls health
+#  11. (with ANALYTICS=umami) sets up Umami and adds its tracking script to Ghost
 #
 # Env knobs:
 #   INSTALL_DIR        target directory (default /opt/ghostberry)
@@ -33,6 +34,8 @@
 #   MAIL_MODE          builtin | smtp | none  (skip the email prompt; see setup.sh)
 #   OFFSITE=r2 + R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 #                      copy every backup to Cloudflare R2 (see guides/BACKUP.md)
+#   ANALYTICS=umami    web analytics with Umami; ANALYTICS_URL sets its address
+#                      (default https://stats.<domain>; see guides/ANALYTICS.md)
 #   NONINTERACTIVE=1   refuse any prompting
 #   GHOSTBERRY_THEME=keep  leave a brand-new blog on Ghost's default theme
 #                      (Almanac is still installed, just not switched on)
@@ -61,7 +64,7 @@ for arg in "$@"; do
     --no-health) SKIP_HEALTH=1 ;;
     -h|--help)
       if [[ -f "$0" ]]; then
-        sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'
       else
         echo "Usage: curl -fsSL <url>/install.sh | sudo [VAR=value ...] bash -s -- [--harden] [--no-health]"
         echo "See https://github.com/${GHOSTBERRY_REPO:-dm807cam/ghostberry}#install for variables."
@@ -269,7 +272,8 @@ for v in GHOST_URL CLOUDFLARE_TUNNEL_TOKEN \
          GHOST_MEM_LIMIT DB_MEM_LIMIT CLOUDFLARED_MEM_LIMIT MAIL_MEM_LIMIT \
          MYSQL_BUFFER_POOL BACKUP_KEEP BACKUP_ENCRYPTION_KEY \
          OFFSITE R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
-         R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE; do
+         R2_JURISDICTION R2_PREFIX R2_ENDPOINT OFFSITE_KEEP RCLONE_IMAGE \
+         ANALYTICS ANALYTICS_URL UMAMI_IMAGE UMAMI_DB_IMAGE UMAMI_MEM_LIMIT UMAMI_DB_MEM_LIMIT; do
   if [[ -n "${!v:-}" ]]; then SETUP_ENV+=("${v}=${!v}"); fi
 done
 sudo -u "${GHOSTBERRY_USER}" env "${SETUP_ENV[@]}" ./setup.sh
@@ -357,6 +361,16 @@ THEME_STATE="$(sudo -u "${GHOSTBERRY_USER}" ./scripts/theme.sh install 2>/dev/nu
   || warn "Couldn't install the Almanac theme; try later with: ./scripts/theme.sh install"
 GHOST_STARTED_BEFORE="$(docker inspect -f '{{.State.StartedAt}}' ghost 2>/dev/null || true)"
 
+# Umami starts with a well-known login (admin / umami). Start it on its
+# own and replace that login before the rest of the stack: on a new install
+# the tunnel isn't up yet, and `up -d` below only returns once Ghost is
+# healthy, which can take minutes on a Pi.
+if grep -qE '^ANALYTICS="umami"' .env; then
+  log "Starting Umami and replacing its default login"
+  sudo -u "${GHOSTBERRY_USER}" ./scripts/analytics.sh secure \
+    || warn "Couldn't set Umami's admin password; run ./scripts/analytics.sh secure"
+fi
+
 log "Starting Ghostberry"
 if systemctl is-active --quiet ghostberry.service; then
   # The unit is a oneshot with RemainAfterExit, so `start` would be a no-op
@@ -395,6 +409,16 @@ if [[ "${SKIP_HEALTH:-0}" != "1" ]]; then
     if [[ "${GHOSTBERRY_THEME:-almanac}" != "keep" ]]; then
       sudo -u "${GHOSTBERRY_USER}" ./scripts/theme.sh activate --if-new \
         || warn "Couldn't switch to the Almanac theme; pick it in Ghost Admin → Settings → Design."
+    fi
+
+    # Analytics on: make sure Umami knows the blog and Ghost loads its
+    # script. Off: take the script out again (a no-op if it was never in).
+    if grep -qE '^ANALYTICS="umami"' .env; then
+      log "Connecting Umami analytics"
+      sudo -u "${GHOSTBERRY_USER}" ./scripts/analytics.sh connect \
+        || warn "Couldn't connect analytics; check with: ./scripts/analytics.sh status"
+    else
+      sudo -u "${GHOSTBERRY_USER}" ./scripts/analytics.sh disconnect >/dev/null 2>&1 || true
     fi
   fi
 fi
@@ -437,6 +461,7 @@ cat <<EOF
    Mail:      cd ${INSTALL_DIR} && ./scripts/mail.sh test you@example.com
    Theme:     Almanac is installed (Ghost Admin → Settings → Design → Change theme)
    Off-site:  cd ${INSTALL_DIR} && ./scripts/offsite.sh status
+   Analytics: cd ${INSTALL_DIR} && ./scripts/analytics.sh status
 
 EOF
 

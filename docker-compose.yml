@@ -202,6 +202,93 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  # Web analytics (Umami): cookieless page-view stats with its own dashboard.
+  # Off unless COMPOSE_PROFILES contains "analytics" (ANALYTICS=umami in
+  # .env). Readers' browsers load its script from ANALYTICS_URL, a second
+  # route on the same Cloudflare Tunnel (stats.example.com →
+  # http://umami:3000). scripts/analytics.sh adds that script to Ghost.
+  umami:
+    image: ${UMAMI_IMAGE:-ghcr.io/umami-software/umami:3.5.0}
+    container_name: umami
+    restart: unless-stopped
+    profiles: [analytics]
+    environment:
+      # Passwords from setup.sh are letters and digits only, so URL-safe.
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:-}@umami_db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:-}
+      # Every request arrives through cloudflared; the visitor's address is
+      # in Cloudflare's header. Without this, all readers look like one.
+      CLIENT_IP_HEADER: cf-connecting-ip
+      DISABLE_TELEMETRY: 1
+      # Ghostberry releases pin and update the image.
+      DISABLE_UPDATES: 1
+    depends_on:
+      umami_db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - analytics
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    mem_limit: ${UMAMI_MEM_LIMIT:-384m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  umami_db:
+    image: ${UMAMI_DB_IMAGE:-postgres:18.7-alpine}
+    container_name: umami_db
+    restart: unless-stopped
+    profiles: [analytics]
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:-}
+    volumes:
+      # Postgres 18 images keep data in a versioned subdirectory of this.
+      - umami_db:/var/lib/postgresql
+    networks:
+      - analytics
+    command:
+      - postgres
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - max_connections=20
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami -q"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: ${UMAMI_DB_MEM_LIMIT:-160m}
+    shm_size: 64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
   ghost_content:
     driver: local
@@ -209,14 +296,21 @@ volumes:
     driver: local
   mail_data:
     driver: local
+  umami_db:
+    driver: local
 
 networks:
   # frontend = ghost ↔ cloudflared (public ingress path).
   # backend  = ghost ↔ db          (data plane; cloudflared cannot reach MySQL).
   # mail     = ghost ↔ mail        (built-in relay; needs outbound internet).
+  # analytics = umami ↔ umami_db   (no internet; umami is also on frontend
+  #             so cloudflared can reach it).
   frontend:
     driver: bridge
   backend:
     driver: bridge
   mail:
     driver: bridge
+  analytics:
+    driver: bridge
+    internal: true

@@ -122,8 +122,16 @@ docker stats --no-stream
    DB_MEM_LIMIT=384m
    MYSQL_BUFFER_POOL=64M
    ```
+   Analytics on? Umami and its database use about 160 MB. Lower
+   `UMAMI_MEM_LIMIT` (not below ~256m) or turn analytics off: see
+   [ANALYTICS.md](ANALYTICS.md#turn-it-off).
 3. Check swap: `swapon --show`. Raspberry Pi OS Trixie uses zram via `rpi-swap`;
    Bookworm uses `dphys-swapfile` (`CONF_SWAPSIZE` in `/etc/dphys-swapfile`).
+
+## Analytics
+
+See [ANALYTICS.md → Troubleshooting](ANALYTICS.md#troubleshooting). Start with
+`./scripts/analytics.sh status`.
 
 ## Can't open /ghost admin
 

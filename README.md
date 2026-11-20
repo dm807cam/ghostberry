@@ -18,6 +18,7 @@ That's it. The installer is idempotent — re-run it any time to update the sour
 - 🛡️ **Hardened containers** — dropped capabilities, `no-new-privileges`, memory caps, log rotation
 - 💾 **Daily encrypted backups** via cron, with a real `restore.sh`, and optional off-site copies in **Cloudflare R2** (free up to 10 GB), so a dead SD card doesn't take your blog with it
 - 🚀 **systemd unit** for clean boot/shutdown
+- 📊 **Optional web analytics with [Umami](https://umami.is)**: visitors, top posts and referrers on your own dashboard, with no cookies and the data on your Pi. The installer sets it up and connects it to Ghost. See [guides/ANALYTICS.md](guides/ANALYTICS.md)
 - 📖 **Almanac, a clean blog theme, installed and ready**: a side rail, a serif reading column, dark mode, self-hosted fonts and no third-party requests. A new blog starts on it; an existing blog keeps its theme. See [The Almanac theme](#the-almanac-theme)
 - 🔔 **Update notices:** a banner in Ghost Admin and one email to the admins when a new Ghostberry release is out. Updating is re-running the install command, which moves to the exact image versions that release pins
 - 🍓 **Pi-aware bootstrap** — enables memory cgroups, ensures swap, installs Docker
@@ -58,6 +59,14 @@ With the built-in server, the installer ends by printing the DNS records (DKIM, 
 
 Finally it offers **off-site backups to Cloudflare R2**. Recommended if the Pi runs from an SD card: every nightly backup is copied to R2 (free up to 10 GB), already encrypted. You need an R2 bucket and a bucket-scoped API token; [guides/BACKUP.md](guides/BACKUP.md#off-site-copies-cloudflare-r2) walks through it. Skip it now and turn it on later with `OFFSITE=r2 ./setup.sh`.
 
+Last, it offers **web analytics with Umami**. Say yes and it runs Umami next to
+Ghost, replaces Umami's default login with a generated password, creates a
+website for your blog and adds the tracking script to Ghost's site header.
+It needs one more route on your tunnel (`stats.example.com` →
+`http://umami:3000`) and about 160 MB of RAM;
+[guides/ANALYTICS.md](guides/ANALYTICS.md) has the details. Turn it on later
+with `ANALYTICS=umami ./setup.sh && docker compose up -d && ./scripts/analytics.sh connect`.
+
 For a fully unattended run, pre-set everything:
 
 ```bash
@@ -77,6 +86,8 @@ MAIL_RELAY_HOST=smtp-relay.brevo.com MAIL_RELAY_USER=you@example.com MAIL_RELAY_
 MAIL_MODE=smtp MAIL_HOST=smtp.postmarkapp.com MAIL_USER=<token> MAIL_PASSWORD=<token> MAIL_FROM=blog@example.com
 # no email
 MAIL_MODE=none
+# web analytics (add the stats.example.com route to the tunnel too)
+ANALYTICS=umami ANALYTICS_URL=https://stats.example.com
 ```
 
 Optional flags:
@@ -143,6 +154,10 @@ docker compose logs -f
 
 # Restore from a backup
 ./scripts/restore.sh backups/ghost_backup_20260514T021700Z.tar.gz
+
+# Web analytics (if enabled): dashboard login, health, public address
+./scripts/analytics.sh login
+./scripts/analytics.sh status
 
 # Is a newer Ghostberry release out? (a daily cron job also checks)
 ./scripts/check-update.sh
@@ -216,6 +231,7 @@ checker ([gscan](https://gscan.ghost.org)) for Ghost 6 with no warnings.
 │   ├── restore.sh          # inverse of backup
 │   ├── check-update.sh     # daily: new release? email the admins once
 │   ├── theme.sh            # install | activate | status (the Almanac theme)
+│   ├── analytics.sh        # connect | disconnect | status | login (Umami)
 │   └── mail.sh             # dns | test <addr> | status
 ├── themes/
 │   └── almanac/            # the bundled Ghost theme
@@ -223,6 +239,7 @@ checker ([gscan](https://gscan.ghost.org)) for Ghost 6 with no warnings.
 │   ├── MAIL.md
 │   ├── SECURITY.md
 │   ├── BACKUP.md
+│   ├── ANALYTICS.md
 │   └── TROUBLESHOOTING.md
 └── backups/                # local archives (chmod 700)
 ```
@@ -233,6 +250,7 @@ checker ([gscan](https://gscan.ghost.org)) for Ghost 6 with no warnings.
 - **Container hardening:** all services drop `ALL` capabilities and re-add only what's needed; `no-new-privileges` set; memory caps enforced.
 - **Secrets** live only in `.env` (mode `600`) and are never baked into images.
 - **Backups** are AES-256-encrypted via OpenSSL (`pbkdf2`, 200k iters) with an auto-generated 40-char passphrase stored in `.env`. Back that file up somewhere safe. Off-site copies in R2 are uploaded already encrypted, with a token limited to one bucket.
+- **Analytics are private too.** Umami's database has its own Docker network with no internet access; Umami itself is reachable only through the tunnel, and its default login is replaced on first start.
 - **Mail server is send-only and private.** It joins a dedicated Docker network shared only with Ghost, publishes no ports, only accepts senders from your own domain, and runs read-only with every capability dropped.
 - **Optional `--harden`** flag turns on the host firewall and unattended security upgrades.
 
@@ -253,7 +271,7 @@ Ghost 5 no longer gets updates. Re-running the installer moves an install on the
 
 - Check your theme at [gscan.ghost.org](https://gscan.ghost.org): Ghost 6 removed AMP.
 - Custom integrations must stop using `?limit=all` and paginate instead.
-- Ghost 6's **ActivityPub ("Network")** and **web analytics** features need extra services (Ghost's ActivityPub service and Tinybird) that Ghostberry doesn't set up yet. Everything else works. You may see a harmless `Could not get webhook secret for ActivityPub` line in the logs.
+- Ghost 6's **ActivityPub ("Network")** and **web analytics** features need extra services (Ghost's ActivityPub service and Tinybird) that Ghostberry doesn't set up yet. For visitor statistics, use the optional [Umami analytics](guides/ANALYTICS.md) instead. Everything else works. You may see a harmless `Could not get webhook secret for ActivityPub` line in the logs.
 
 To stay on Ghost 5 for now, pin it explicitly, e.g. `GHOST_IMAGE=ghost:5.130-alpine`.
 
@@ -262,7 +280,7 @@ To stay on Ghost 5 for now, pin it explicitly, e.g. `GHOST_IMAGE=ghost:5.130-alp
 ```bash
 sudo systemctl disable --now ghostberry
 sudo rm /etc/systemd/system/ghostberry.service /etc/cron.d/ghostberry-backup
-cd /opt/ghostberry && docker compose --profile mail down -v
+cd /opt/ghostberry && docker compose --profile mail --profile analytics down -v
 sudo rm -rf /opt/ghostberry
 ```
 

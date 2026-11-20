@@ -351,6 +351,10 @@
         <p>A built-in send-only mail server signs Ghost's emails with DKIM and retries failed deliveries. Or plug in any SMTP provider.</p>
       </div>
       <div class="card">
+        <h3>Analytics, if you want them</h3>
+        <p>Say yes during install and Umami runs next to Ghost: visitors, top posts and referrers on your own dashboard, with no cookies and the data on your Pi. The installer connects it to the blog.</p>
+      </div>
+      <div class="card">
         <h3>Updates that find you</h3>
         <p>When a new release is out, Ghost Admin shows a banner and your admins get one email. To update, run the install command again: it backs up first and waits until Ghost is healthy.</p>
       </div>
@@ -476,6 +480,7 @@
         <tr><td><code>./scripts/mail.sh status</code></td><td>Mail server health, queue and recent log</td></tr>
         <tr><td><code>./scripts/offsite.sh status</code></td><td>Last upload to Cloudflare R2 and space used</td></tr>
         <tr><td><code>./scripts/offsite.sh pull latest</code></td><td>Download the newest off-site backup (e.g. on a new Pi)</td></tr>
+        <tr><td><code>./scripts/analytics.sh login</code></td><td>Address and login of the analytics dashboard (if enabled)</td></tr>
         <tr><td><code>docker compose logs -f</code></td><td>Follow all logs</td></tr>
         <tr><td><code>sudo systemctl status ghostberry</code></td><td>Service status</td></tr>
       </tbody>
@@ -513,8 +518,8 @@
       <details>
         <summary>What doesn't work yet?</summary>
         <p>Newsletters need a Mailgun account, because Ghost only sends bulk email through Mailgun. Ghost 6's
-        ActivityPub ("Network") and web analytics features need extra services that Ghostberry doesn't run yet.
-        Everything else in Ghost works.</p>
+        ActivityPub ("Network") and web analytics features need extra services that Ghostberry doesn't run yet;
+        for visitor statistics, turn on the optional Umami analytics instead. Everything else in Ghost works.</p>
       </details>
 
       <details>
