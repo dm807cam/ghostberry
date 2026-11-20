@@ -157,7 +157,7 @@ inbound ports, actively maintained, configurable from `.env`.
 
 | Option | Type | Idle RAM | Image | Notes |
 |---|---|---|---|---|
-| **maddy 0.9.7** (chosen) | Go single binary; SMTP, DKIM, queue, MTA-STS | **~6 MB** (measured) | 31 MB compressed | Generates DKIM keys itself; one small config file; arm64 image on GHCR; active releases |
+| **maddy 0.9.8** (chosen) | Go single binary; SMTP, DKIM, queue, MTA-STS | **~6 MB** (measured) | 31 MB compressed | Generates DKIM keys itself; one small config file; arm64 image on GHCR; active releases |
 | Postfix via `bokysan/docker-postfix` 5.2 | Postfix + rspamd for DKIM | ~296 MB (measured) | 92–135 MB compressed | Battle-tested and very configurable, but rspamd costs about 50× the RAM |
 | Stalwart 1.0 | Rust all-in-one (SMTP/IMAP/JMAP, web admin) | ~100–200 MB | larger | Modern and excellent, but a full mailbox server: far more than Ghost needs |
 | mox | Go all-in-one mail server | ~512 MB recommended | — | Secure-by-default and modern, but wants to own the domain's mail and inbound :25/:443; the author doesn't recommend Docker |

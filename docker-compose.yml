@@ -6,7 +6,7 @@
 # GHOST_IMAGE_HOLD is set by setup.sh only to avoid a downgrade (see there).
 services:
   ghost:
-    image: ${GHOST_IMAGE:-${GHOST_IMAGE_HOLD:-ghost:6.77.0-alpine}}
+    image: ${GHOST_IMAGE:-${GHOST_IMAGE_HOLD:-ghost:6.78.0-alpine}}
     container_name: ghost
     restart: unless-stopped
     environment:
@@ -126,7 +126,7 @@ services:
         max-file: "3"
 
   cloudflared:
-    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.11.0}
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.11.1}
     container_name: cloudflared
     restart: unless-stopped
     command: tunnel --no-autoupdate run
@@ -157,7 +157,7 @@ services:
   # choose "built-in" mail; it is off unless COMPOSE_PROFILES contains "mail".
   # No ports are published: only Ghost can reach it, over the `mail` network.
   mail:
-    image: ${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.7}
+    image: ${MAIL_IMAGE:-ghcr.io/foxcpp/maddy:0.9.8}
     container_name: ghost_mail
     restart: unless-stopped
     profiles: [mail]
